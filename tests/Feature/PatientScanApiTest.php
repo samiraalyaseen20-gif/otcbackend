@@ -21,6 +21,8 @@ class PatientScanApiTest extends TestCase
         $payload = [
             'patient_id' => 'P-100234',
             'patient_name' => 'John Doe',
+            'patient_phone' => '07701234567',
+            'doctor_name' => 'Dr. Smith',
             'study_date' => '2026-08-11',
             'dicom_file' => $file,
         ];
@@ -34,6 +36,8 @@ class PatientScanApiTest extends TestCase
                          'id',
                          'patient_id',
                          'patient_name',
+                         'patient_phone',
+                         'doctor_name',
                          'study_date',
                          'file_path',
                          'created_at',
@@ -44,6 +48,8 @@ class PatientScanApiTest extends TestCase
         $this->assertDatabaseHas('patient_scans', [
             'patient_id' => 'P-100234',
             'patient_name' => 'John Doe',
+            'patient_phone' => '07701234567',
+            'doctor_name' => 'Dr. Smith',
             'study_date' => '2026-08-11',
         ]);
 
@@ -56,6 +62,8 @@ class PatientScanApiTest extends TestCase
         PatientScan::create([
             'patient_id' => 'P-999',
             'patient_name' => 'Test Patient',
+            'patient_phone' => '07701234567',
+            'doctor_name' => 'Dr. Alice',
             'study_date' => '2026-08-11',
             'file_path' => 'dicom_files/test.dcm',
         ]);
@@ -68,7 +76,10 @@ class PatientScanApiTest extends TestCase
                          'id',
                          'PatientId',
                          'PatientName',
+                         'PatientPhone',
+                         'DoctorName',
                          'StudyDate',
+                         'CreatedAt',
                          'FileUrl',
                      ],
                  ]);
