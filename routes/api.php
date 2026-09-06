@@ -10,3 +10,5 @@ Route::get('/user', function (Request $request) {
 
 Route::get('/scans', [ScanController::class, 'index']);
 Route::post('/scans', [ScanController::class, 'store']);
+Route::delete('/scans/{id}', [ScanController::class, 'destroy']);
+Route::delete('/patients/{patient_id}', [ScanController::class, 'destroyByPatient']);

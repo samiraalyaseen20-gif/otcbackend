@@ -84,4 +84,53 @@ class PatientScanApiTest extends TestCase
                      ],
                  ]);
     }
+
+    public function test_can_delete_single_scan(): void
+    {
+        Storage::fake('public');
+
+        $filePath = 'dicom_files/test_delete.dcm';
+        Storage::disk('public')->put($filePath, 'fake content');
+
+        $scan = PatientScan::create([
+            'patient_id' => 'P-DEL1',
+            'patient_name' => 'Delete Target',
+            'file_path' => $filePath,
+        ]);
+
+        $response = $this->deleteJson('/api/scans/' . $scan->id);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('patient_scans', ['id' => $scan->id]);
+        Storage::disk('public')->assertMissing($filePath);
+    }
+
+    public function test_can_delete_all_patient_scans(): void
+    {
+        Storage::fake('public');
+
+        $file1 = 'dicom_files/file1.dcm';
+        $file2 = 'dicom_files/file2.dcm';
+        Storage::disk('public')->put($file1, 'fake content 1');
+        Storage::disk('public')->put($file2, 'fake content 2');
+
+        PatientScan::create([
+            'patient_id' => 'P-DELALL',
+            'patient_name' => 'Full Delete Target',
+            'file_path' => $file1,
+        ]);
+
+        PatientScan::create([
+            'patient_id' => 'P-DELALL',
+            'patient_name' => 'Full Delete Target',
+            'file_path' => $file2,
+        ]);
+
+        $response = $this->deleteJson('/api/patients/P-DELALL');
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('patient_scans', ['patient_id' => 'P-DELALL']);
+        Storage::disk('public')->assertMissing($file1);
+        Storage::disk('public')->assertMissing($file2);
+    }
 }

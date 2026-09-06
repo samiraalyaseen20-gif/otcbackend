@@ -62,4 +62,46 @@ class ScanController extends Controller
             'data' => $scan,
         ], 201);
     }
+
+    /**
+     * Remove the specified DICOM scan from storage and database.
+     */
+    public function destroy($id)
+    {
+        $scan = PatientScan::find($id);
+
+        if (!$scan) {
+            return response()->json(['message' => 'Scan not found'], 404);
+        }
+
+        // Delete physical DICOM file from storage disk
+        if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
+            Storage::disk('public')->delete($scan->file_path);
+        }
+
+        $scan->delete();
+
+        return response()->json(['message' => 'Scan deleted successfully'], 200);
+    }
+
+    /**
+     * Remove all DICOM scans for a specific patient ID.
+     */
+    public function destroyByPatient($patientId)
+    {
+        $scans = PatientScan::where('patient_id', $patientId)->get();
+
+        if ($scans->isEmpty()) {
+            return response()->json(['message' => 'No scans found for this patient'], 404);
+        }
+
+        foreach ($scans as $scan) {
+            if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
+                Storage::disk('public')->delete($scan->file_path);
+            }
+            $scan->delete();
+        }
+
+        return response()->json(['message' => 'Patient profile and all DICOM files deleted successfully'], 200);
+    }
 }
