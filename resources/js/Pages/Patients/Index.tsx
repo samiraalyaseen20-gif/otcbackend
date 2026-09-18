@@ -65,9 +65,7 @@ export default function Index({ patients }: any) {
                                 <TableRow>
                                     <TableHead className="w-[80px] text-right font-bold text-xs">#</TableHead>
                                     <TableHead className="text-right font-bold text-xs">اسم المريض</TableHead>
-                                    <TableHead className="text-right font-bold text-xs">العمر</TableHead>
-                                    <TableHead className="text-right font-bold text-xs">الجنس</TableHead>
-                                    <TableHead className="text-right font-bold text-xs">الطبيب المحيل</TableHead>
+                                    <TableHead className="text-right font-bold text-xs">الطبيب</TableHead>
                                     <TableHead className="text-right font-bold text-xs">رقم الهاتف</TableHead>
                                     <TableHead className="text-right font-bold text-xs">حالة الرفع</TableHead>
                                     <TableHead className="text-center font-bold text-xs">الخيارات</TableHead>
@@ -90,13 +88,11 @@ export default function Index({ patients }: any) {
                                                 {(patients.current_page - 1) * patients.per_page + index + 1}
                                             </TableCell>
                                             <TableCell className="text-xs font-bold">{patient.patient_name}</TableCell>
-                                            <TableCell className="text-xs">{patient.age}</TableCell>
-                                            <TableCell className="text-xs">{patient.gender}</TableCell>
-                                            <TableCell className="text-xs">{patient.referring_doctor || '-'}</TableCell>
-                                            <TableCell className="text-xs text-mono" dir="ltr">{patient.phone || '-'}</TableCell>
+                                            <TableCell className="text-xs">{patient.doctor_name || '-'}</TableCell>
+                                            <TableCell className="text-xs text-mono" dir="ltr">{patient.patient_phone || '-'}</TableCell>
                                             <TableCell className="text-xs">
-                                                <Badge variant={patient.upload_status === 'synced' ? 'default' : 'secondary'} className="text-[10px] px-2 py-0 h-5">
-                                                    {patient.upload_status === 'synced' ? 'مكتمل' : 'قيد الانتظار'}
+                                                <Badge variant={patient.file_path ? 'default' : 'secondary'} className="text-[10px] px-2 py-0 h-5">
+                                                    {patient.file_path ? 'مكتمل' : 'قيد الانتظار'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-center">

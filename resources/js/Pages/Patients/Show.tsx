@@ -101,9 +101,6 @@ export default function Show({ patient }: any) {
                             <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                                 {patient.patient_name}
                             </h1>
-                            <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                                العمر: {patient.age} | الجنس: {patient.gender} | الطبيب: {patient.referring_doctor || '-'}
-                            </p>
                         </div>
                     </div>
                 </div>

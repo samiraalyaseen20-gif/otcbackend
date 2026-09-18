@@ -47,7 +47,11 @@ class ScanController extends Controller
         // Store the uploaded file directly in public/dicom_files
         $file = $request->file('dicom_file');
         $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
-        $file->move(public_path('dicom_files'), $filename);
+        $destinationPath = public_path('dicom_files');
+        if (!file_exists($destinationPath)) {
+            mkdir($destinationPath, 0777, true);
+        }
+        $file->move($destinationPath, $filename);
         $filePath = 'dicom_files/' . $filename;
 
         // Save record into patient_scans table
@@ -162,7 +166,11 @@ class ScanController extends Controller
         // Store new file
         $file = $request->file('dicom_file');
         $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
-        $file->move(public_path('dicom_files'), $filename);
+        $destinationPath = public_path('dicom_files');
+        if (!file_exists($destinationPath)) {
+            mkdir($destinationPath, 0777, true);
+        }
+        $file->move($destinationPath, $filename);
         $filePath = 'dicom_files/' . $filename;
         
         $scan->file_path = $filePath;
