@@ -20,8 +20,8 @@ class PatientController extends Controller
         $patient = PatientScan::findOrFail($id);
         
         // Generate a URL to the DICOM file if it exists locally
-        if ($patient->dicom_file_path) {
-            $patient->dicom_url = url('storage/' . $patient->dicom_file_path);
+        if ($patient->file_path) {
+            $patient->dicom_url = asset($patient->file_path);
         }
 
         return Inertia::render('Patients/Show', [

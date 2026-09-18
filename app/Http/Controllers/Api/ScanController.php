@@ -23,7 +23,7 @@ class ScanController extends Controller
                 'DoctorName' => $scan->doctor_name,
                 'StudyDate' => $scan->study_date,
                 'CreatedAt' => $scan->created_at ? $scan->created_at->format('Y-m-d H:i:s') : null,
-                'FileUrl' => asset(Storage::url($scan->file_path)),
+                'FileUrl' => asset($scan->file_path),
             ];
         });
 
@@ -44,8 +44,11 @@ class ScanController extends Controller
             'dicom_file' => 'required|file',
         ]);
 
-        // Store the uploaded file in storage/app/public/dicom_files
-        $filePath = $request->file('dicom_file')->store('dicom_files', 'public');
+        // Store the uploaded file directly in public/dicom_files
+        $file = $request->file('dicom_file');
+        $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
+        $file->move(public_path('dicom_files'), $filename);
+        $filePath = 'dicom_files/' . $filename;
 
         // Save record into patient_scans table
         $scan = PatientScan::create([
@@ -74,9 +77,9 @@ class ScanController extends Controller
             return response()->json(['message' => 'Scan not found'], 404);
         }
 
-        // Delete physical DICOM file from storage disk
-        if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
-            Storage::disk('public')->delete($scan->file_path);
+        // Delete physical DICOM file from public folder
+        if ($scan->file_path && file_exists(public_path($scan->file_path))) {
+            unlink(public_path($scan->file_path));
         }
 
         $scan->delete();
@@ -96,8 +99,8 @@ class ScanController extends Controller
         }
 
         foreach ($scans as $scan) {
-            if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
-                Storage::disk('public')->delete($scan->file_path);
+            if ($scan->file_path && file_exists(public_path($scan->file_path))) {
+                unlink(public_path($scan->file_path));
             }
             $scan->delete();
         }
@@ -152,12 +155,15 @@ class ScanController extends Controller
         ]);
 
         // Delete old file
-        if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
-            Storage::disk('public')->delete($scan->file_path);
+        if ($scan->file_path && file_exists(public_path($scan->file_path))) {
+            unlink(public_path($scan->file_path));
         }
 
         // Store new file
-        $filePath = $request->file('dicom_file')->store('dicom_files', 'public');
+        $file = $request->file('dicom_file');
+        $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
+        $file->move(public_path('dicom_files'), $filename);
+        $filePath = 'dicom_files/' . $filename;
         
         $scan->file_path = $filePath;
         $scan->save();
@@ -166,7 +172,7 @@ class ScanController extends Controller
             'message' => 'DICOM scan replaced successfully',
             'data' => [
                 'id' => $scan->id,
-                'FileUrl' => asset(Storage::url($scan->file_path)),
+                'FileUrl' => asset($scan->file_path),
             ]
         ], 200);
     }
