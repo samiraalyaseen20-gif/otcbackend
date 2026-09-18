@@ -269,7 +269,7 @@ export default function MapPage({ customers, filters, districtsList, departments
 
     return (
         <AuthenticatedLayout header="خريطة مواقع العملاء">
-            <Head title="خريطة العملاء - الهادي للمكالمات التجارية" />
+            <Head title="خريطة العملاء - سجل المرضى" />
 
             <div className="space-y-4" dir="rtl">
                 {/* Header Navigation & Statistics Toolbar */}

@@ -83,7 +83,7 @@ export default function UsersIndex({ users }: Props) {
 
     return (
         <AuthenticatedLayout header="إدارة المستخدمين">
-            <Head title="إدارة المستخدمين - الهادي للمكالمات التجارية" />
+            <Head title="إدارة المستخدمين - سجل المرضى" />
 
             <div className="space-y-6" dir="rtl">
                 {/* Page Header */}

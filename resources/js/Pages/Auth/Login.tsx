@@ -31,7 +31,7 @@ export default function Login({ status }: { status?: string }) {
                         <PhoneCall className="h-5 w-5" />
                     </div>
                     <div className="text-center">
-                        <h1 className="text-2xl font-bold tracking-tight">الهادي للمكالمات التجارية</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">سجل المرضى</h1>
                         <p className="text-sm text-muted-foreground mt-1">نظام إدارة ومتابعة الاتصالات</p>
                     </div>
                 </div>

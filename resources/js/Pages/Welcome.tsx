@@ -12,7 +12,7 @@ export default function Welcome({
 }: PageProps<{ laravelVersion: string; phpVersion: string }>) {
     return (
         <div dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
-            <Head title="الهادي للمكالمات التجارية" />
+            <Head title="سجل المرضى" />
 
             {/* Header / Navbar */}
             <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/70 border-b border-slate-800/60 px-6 py-4">
@@ -22,7 +22,7 @@ export default function Welcome({
                             <PhoneCall className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight text-white">الهادي للمكالمات التجارية</h1>
+                            <h1 className="text-xl font-bold tracking-tight text-white">سجل المرضى</h1>
                             <p className="text-xs text-indigo-400 font-medium">نظام إدارة مكالمات متطور</p>
                         </div>
                     </div>
@@ -64,11 +64,11 @@ export default function Welcome({
                     </div>
 
                     <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-                        حلول اتصالات تجارية <span className="bg-gradient-to-r from-indigo-400 via-violet-300 to-pink-400 bg-clip-text text-transparent">ذكية ومتكاملة</span>
+                        حلول اتصالات طبية <span className="bg-gradient-to-r from-indigo-400 via-violet-300 to-pink-400 bg-clip-text text-transparent">ذكية ومتكاملة</span>
                     </h2>
 
                     <p className="text-lg text-slate-300 leading-relaxed">
-                        منظومة "الهادي للمكالمات التجارية" مبنية على أحدث تقنيات لارافيل و Inertia React مع واجهات Shadcn UI المتقدمة لإدارة الاتصالات والتحليلات بكفاءة عالية.
+                        منظومة "سجل المرضى" مبنية على أحدث تقنيات لارافيل و Inertia React مع واجهات Shadcn UI المتقدمة لإدارة الاتصالات والتحليلات بكفاءة عالية.
                     </p>
 
                     <div className="pt-4 flex flex-wrap justify-center gap-4">
@@ -92,9 +92,9 @@ export default function Welcome({
                             <div className="p-3 w-fit bg-indigo-500/10 text-indigo-400 rounded-xl mb-3">
                                 <PhoneCall className="w-6 h-6" />
                             </div>
-                            <CardTitle className="text-white text-xl">إدارة المكالمات</CardTitle>
+                            <CardTitle className="text-white text-xl">إدارة المرضى</CardTitle>
                             <CardDescription className="text-slate-400">
-                                توجيه وتسجيل وتتبع كافة المكالمات التجارية الواردة والصادرة بدقة وسلاسة.
+                                توجيه وتسجيل وتتبع كافة المرضى الطبية الواردة والصادرة بدقة وسلاسة.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-slate-300">
@@ -113,7 +113,7 @@ export default function Welcome({
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-slate-300">
-                            متابعة معدلات الاستجابة، مدة المكالمات، وتقارير دورية ترفع من جودة خدمة العملاء.
+                            متابعة معدلات الاستجابة، مدة المرضى، وتقارير دورية ترفع من جودة خدمة العملاء.
                         </CardContent>
                     </Card>
 
@@ -128,7 +128,7 @@ export default function Welcome({
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-slate-300">
-                            تحديد أدوار المستخدمين بدقة لضمان سرية واستقرار منظومة الاتصالات التجارية.
+                            تحديد أدوار المستخدمين بدقة لضمان سرية واستقرار منظومة الاتصالات الطبية.
                         </CardContent>
                     </Card>
                 </div>
@@ -137,7 +137,7 @@ export default function Welcome({
             {/* Footer */}
             <footer className="border-t border-slate-800/60 bg-slate-950 py-8 text-center text-xs text-slate-500">
                 <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <p>© {new Date().getFullYear()} الهادي للمكالمات التجارية - جميع الحقوق محفوظة.</p>
+                    <p>© {new Date().getFullYear()} سجل المرضى - جميع الحقوق محفوظة.</p>
                     <p className="font-mono text-slate-600">
                         Laravel v{laravelVersion} | PHP v{phpVersion} | Shadcn UI
                     </p>
