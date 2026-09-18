@@ -104,4 +104,70 @@ class ScanController extends Controller
 
         return response()->json(['message' => 'Patient profile and all DICOM files deleted successfully'], 200);
     }
+
+    /**
+     * Update patient data across all their scans.
+     */
+    public function updatePatient(Request $request, $patientId)
+    {
+        $validated = $request->validate([
+            'patient_name' => 'required|string',
+            'patient_phone' => 'nullable|string',
+            'doctor_name' => 'nullable|string',
+        ]);
+
+        $scans = PatientScan::where('patient_id', $patientId)->get();
+
+        if ($scans->isEmpty()) {
+            return response()->json(['message' => 'Patient not found'], 404);
+        }
+
+        foreach ($scans as $scan) {
+            $scan->patient_name = $validated['patient_name'];
+            if (isset($validated['patient_phone'])) {
+                $scan->patient_phone = $validated['patient_phone'];
+            }
+            if (isset($validated['doctor_name'])) {
+                $scan->doctor_name = $validated['doctor_name'];
+            }
+            $scan->save();
+        }
+
+        return response()->json(['message' => 'Patient updated successfully'], 200);
+    }
+
+    /**
+     * Replace the DICOM file for a specific scan.
+     */
+    public function replaceScanFile(Request $request, $id)
+    {
+        $scan = PatientScan::find($id);
+
+        if (!$scan) {
+            return response()->json(['message' => 'Scan not found'], 404);
+        }
+
+        $request->validate([
+            'dicom_file' => 'required|file',
+        ]);
+
+        // Delete old file
+        if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
+            Storage::disk('public')->delete($scan->file_path);
+        }
+
+        // Store new file
+        $filePath = $request->file('dicom_file')->store('dicom_files', 'public');
+        
+        $scan->file_path = $filePath;
+        $scan->save();
+
+        return response()->json([
+            'message' => 'DICOM scan replaced successfully',
+            'data' => [
+                'id' => $scan->id,
+                'FileUrl' => asset(Storage::url($scan->file_path)),
+            ]
+        ], 200);
+    }
 }
