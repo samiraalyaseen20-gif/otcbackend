@@ -1,3 +1,6 @@
+// Fix for cornerstoneWADOImageLoader with Vite
+(window as any).__webpack_public_path__ = '/build/';
+
 import '../css/app.css';
 import './bootstrap';
 
