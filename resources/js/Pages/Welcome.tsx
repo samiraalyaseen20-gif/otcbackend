@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PhoneCall, ShieldCheck, Zap, Users, BarChart3, Settings, ArrowLeft } from 'lucide-react';
+import { Activity, ShieldCheck, Zap, Users, BarChart3, Settings, ArrowLeft } from 'lucide-react';
 
 export default function Welcome({
     auth,
@@ -19,7 +19,7 @@ export default function Welcome({
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl shadow-lg shadow-indigo-500/20">
-                            <PhoneCall className="w-6 h-6 text-white" />
+                            <Activity className="w-6 h-6 text-white" />
                         </div>
                         <div>
                             <h1 className="text-xl font-bold tracking-tight text-white">سجل المرضى</h1>
@@ -90,7 +90,7 @@ export default function Welcome({
                     <Card className="bg-slate-900/40 border-slate-800/80 backdrop-blur-sm text-slate-100 hover:border-indigo-500/50 transition duration-300">
                         <CardHeader>
                             <div className="p-3 w-fit bg-indigo-500/10 text-indigo-400 rounded-xl mb-3">
-                                <PhoneCall className="w-6 h-6" />
+                                <Activity className="w-6 h-6" />
                             </div>
                             <CardTitle className="text-white text-xl">إدارة المرضى</CardTitle>
                             <CardDescription className="text-slate-400">

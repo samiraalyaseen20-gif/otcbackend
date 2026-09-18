@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PhoneCall } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 export default function Login({ status }: { status?: string }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -28,11 +28,11 @@ export default function Login({ status }: { status?: string }) {
                 {/* Brand Header */}
                 <div className="mb-8 flex flex-col items-center gap-3">
                     <div className="flex items-center justify-center w-10 h-10 rounded-md bg-foreground text-background">
-                        <PhoneCall className="h-5 w-5" />
+                        <Activity className="h-5 w-5" />
                     </div>
                     <div className="text-center">
                         <h1 className="text-2xl font-bold tracking-tight">سجل المرضى</h1>
-                        <p className="text-sm text-muted-foreground mt-1">نظام إدارة ومتابعة الاتصالات</p>
+
                     </div>
                 </div>
 

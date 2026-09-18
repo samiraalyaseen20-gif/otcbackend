@@ -12,7 +12,7 @@ import {
     X,
     Shield,
     User,
-    PhoneCall,
+    Activity,
     History,
     Download,
     Tag,
@@ -309,10 +309,10 @@ export default function AuthenticatedLayout({ children, header }: AuthenticatedP
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                                    <PhoneCall className="h-5 w-5" />
+                                    <Activity className="h-5 w-5" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h4 className="font-bold text-sm text-foreground">تثبيت تطبيق الأرشيف</h4>
+                                    <h4 className="font-bold text-sm text-foreground">تثبيت سجل المرضى</h4>
                                     <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                                         {isIOS 
                                             ? 'أضف التطبيق لشاشتك الرئيسية للوصول السريع ومتابعة عملك'
