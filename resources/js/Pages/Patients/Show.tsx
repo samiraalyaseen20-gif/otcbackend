@@ -5,11 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Move, ZoomIn, SunMedium, Ruler, CircleEqual } from 'lucide-react';
+// @ts-ignore
 import * as cornerstone from 'cornerstone-core';
+// @ts-ignore
 import * as cornerstoneTools from 'cornerstone-tools';
+// @ts-ignore
 import * as cornerstoneMath from 'cornerstone-math';
+// @ts-ignore
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+// @ts-ignore
 import dicomParser from 'dicom-parser';
+// @ts-ignore
 import Hammer from 'hammerjs';
 
 // Setup Cornerstone and CornerstoneTools
