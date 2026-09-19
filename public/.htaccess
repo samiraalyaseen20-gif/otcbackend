@@ -3,6 +3,10 @@
         Options -MultiViews -Indexes
     </IfModule>
 
+    # DICOM MIME type
+    AddType application/dicom .dcm
+
+
     <IfModule mod_php.c>
         php_value upload_max_filesize 512M
         php_value post_max_size 512M
