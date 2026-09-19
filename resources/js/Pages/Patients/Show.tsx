@@ -4,11 +4,12 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Button } from '@/components/ui/button';
 import {
     ArrowRight, FileImage, ChevronDown, ChevronUp,
-    ZoomIn, Move, Sun, Ruler, RotateCw,
-    RefreshCw, Download, Printer, SlidersHorizontal
+    Move, Sun, Ruler, RotateCw,
+    RefreshCw, Download, Printer, SlidersHorizontal, AlertCircle
 } from 'lucide-react';
 
-import { App, AppOptions, ViewConfig } from 'dwv';
+import { App, AppOptions, ViewConfig, WindowLevel } from 'dwv';
+import * as dicomParser from 'dicom-parser';
 
 const TOOLS = [
     { id: 'WindowLevel', label: 'تباين', icon: Sun },
@@ -18,6 +19,7 @@ const TOOLS = [
 
 export default function Show({ patient }: any) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const fallbackCanvasRef = useRef<HTMLCanvasElement>(null);
     const [dwvApp, setDwvApp] = useState<App | null>(null);
     const [activeTool, setActiveTool] = useState('WindowLevel');
     const [activeScan, setActiveScan] = useState<any>(patient.scans?.[0] ?? null);
@@ -25,6 +27,7 @@ export default function Show({ patient }: any) {
     const [loadingDicom, setLoadingDicom] = useState(false);
     const [isInverted, setIsInverted] = useState(false);
     const [scansOpen, setScansOpen] = useState(false);
+    const [useFallback, setUseFallback] = useState(false);
 
     const [isMobile, setIsMobile] = useState<boolean>(
         typeof window !== 'undefined' ? window.innerWidth < 768 : false
@@ -37,6 +40,129 @@ export default function Show({ patient }: any) {
         mq.addEventListener('change', handler);
         return () => mq.removeEventListener('change', handler);
     }, []);
+
+    // Canvas DICOM Fallback Renderer using dicom-parser
+    const renderFallback = async (url: string) => {
+        const canvas = fallbackCanvasRef.current;
+        if (!canvas) return false;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return false;
+            const arrayBuffer = await res.arrayBuffer();
+            const byteArray = new Uint8Array(arrayBuffer);
+            const dataSet = dicomParser.parseDicom(byteArray);
+
+            const rows = dataSet.uint16('x00280010');
+            const cols = dataSet.uint16('x00280011');
+            if (!rows || !cols) return false;
+
+            const bitsAllocated = dataSet.uint16('x00280100') || 16;
+            const pixelRepresentation = dataSet.uint16('x00280103') || 0;
+            const photometricInterpretation = dataSet.string('x00280004') || 'MONOCHROME2';
+            const rescaleIntercept = dataSet.floatString('x00281052') ?? 0;
+            const rescaleSlope = dataSet.floatString('x00281053') ?? 1;
+
+            let windowCenter = dataSet.floatString('x00281050');
+            let windowWidth = dataSet.floatString('x00281051');
+
+            const pixelDataElement = dataSet.elements.x7fe00010;
+            if (!pixelDataElement) return false;
+
+            canvas.width = cols;
+            canvas.height = rows;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return false;
+
+            const offset = pixelDataElement.dataOffset;
+            const length = pixelDataElement.length;
+
+            // Check if Encapsulated JPEG
+            let isJpeg = false;
+            let jpegOffset = offset;
+            for (let i = offset; i < Math.min(offset + 128, byteArray.length - 1); i++) {
+                if (byteArray[i] === 0xFF && byteArray[i + 1] === 0xD8) {
+                    isJpeg = true;
+                    jpegOffset = i;
+                    break;
+                }
+            }
+
+            if (isJpeg) {
+                const jpegBytes = byteArray.subarray(jpegOffset, offset + length);
+                const blob = new Blob([jpegBytes], { type: 'image/jpeg' });
+                const imgUrl = URL.createObjectURL(blob);
+                return new Promise<boolean>((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0, cols, rows);
+                        URL.revokeObjectURL(imgUrl);
+                        resolve(true);
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(imgUrl);
+                        resolve(false);
+                    };
+                    img.src = imgUrl;
+                });
+            }
+
+            // Raw Uncompressed Pixels
+            let pixelArray: Int16Array | Uint16Array | Uint8Array;
+            if (bitsAllocated === 16) {
+                if (pixelRepresentation === 1) {
+                    pixelArray = new Int16Array(arrayBuffer, offset, Math.floor(length / 2));
+                } else {
+                    pixelArray = new Uint16Array(arrayBuffer, offset, Math.floor(length / 2));
+                }
+            } else {
+                pixelArray = new Uint8Array(arrayBuffer, offset, length);
+            }
+
+            let minVal = Infinity;
+            let maxVal = -Infinity;
+            for (let i = 0; i < pixelArray.length; i++) {
+                const val = pixelArray[i] * rescaleSlope + rescaleIntercept;
+                if (val < minVal) minVal = val;
+                if (val > maxVal) maxVal = val;
+            }
+
+            if (windowCenter === undefined || windowWidth === undefined || windowWidth <= 0) {
+                windowWidth = maxVal - minVal;
+                windowCenter = minVal + windowWidth / 2;
+            }
+
+            if (windowWidth <= 0) windowWidth = 1;
+
+            const imgData = ctx.createImageData(cols, rows);
+            const data = imgData.data;
+            const lowerBound = windowCenter - windowWidth / 2;
+            const isMonochrome1 = photometricInterpretation.trim() === 'MONOCHROME1';
+
+            let pIdx = 0;
+            for (let i = 0; i < pixelArray.length; i++) {
+                const val = pixelArray[i] * rescaleSlope + rescaleIntercept;
+                let intensity = Math.round(((val - lowerBound) / windowWidth) * 255);
+                if (intensity < 0) intensity = 0;
+                if (intensity > 255) intensity = 255;
+
+                if (isMonochrome1) {
+                    intensity = 255 - intensity;
+                }
+
+                data[pIdx]     = intensity;
+                data[pIdx + 1] = intensity;
+                data[pIdx + 2] = intensity;
+                data[pIdx + 3] = 255;
+                pIdx += 4;
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            return true;
+        } catch (err) {
+            console.error('[Fallback Canvas render error]', err);
+            return false;
+        }
+    };
 
     // Initialize DWV App
     useEffect(() => {
@@ -59,25 +185,68 @@ export default function Show({ patient }: any) {
         app.addEventListener('loadstart', () => {
             setLoadingDicom(true);
             setLoadError(null);
+            setUseFallback(false);
         });
 
         app.addEventListener('loadend', () => {
             setLoadingDicom(false);
             try {
+                app.fitToContainer();
+                app.initWLDisplay();
+
+                // Auto-calculate Window Center & Width if needed
+                const dataIds = app.getDataIds();
+                if (dataIds && dataIds.length > 0) {
+                    const dataId = dataIds[0];
+                    const dataObj: any = app.getData(dataId);
+                    const img: any = (app as any).getImage ? (app as any).getImage(dataId) : dataObj?.getImage?.();
+                    if (img && typeof img.getValueRange === 'function') {
+                        const range = img.getValueRange();
+                        if (range && typeof range.min === 'number' && typeof range.max === 'number' && range.max > range.min) {
+                            const width = range.max - range.min;
+                            const center = range.min + width / 2;
+                            const lg: any = app.getActiveLayerGroup();
+                            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
+                            if (vc && typeof vc.setWindowLevel === 'function') {
+                                vc.setWindowLevel(new WindowLevel(center, width));
+                            }
+                        }
+                    }
+                }
+
                 app.setTool('WindowLevel');
                 setActiveTool('WindowLevel');
-            } catch {}
+            } catch (e) {
+                console.error('[DWV loadend error]', e);
+            }
         });
 
+        const handleResize = () => {
+            try { app.fitToContainer(); } catch {}
+        };
+        window.addEventListener('resize', handleResize);
+
         app.addEventListener('error', (event: any) => {
-            console.error('[DWV ERROR]', event);
-            setLoadingDicom(false);
-            setLoadError('تعذّر عرض صورة DICOM.');
+            console.error('[DWV ERROR - trying Canvas Fallback]', event);
+            if (activeScan?.dicom_url) {
+                renderFallback(activeScan.dicom_url).then((success) => {
+                    setLoadingDicom(false);
+                    if (success) {
+                        setUseFallback(true);
+                    } else {
+                        setLoadError('تعذّر عرض صورة DICOM.');
+                    }
+                });
+            } else {
+                setLoadingDicom(false);
+                setLoadError('تعذّر عرض صورة DICOM.');
+            }
         });
 
         setDwvApp(app);
 
         return () => {
+            window.removeEventListener('resize', handleResize);
             try { app.reset(); } catch {}
             setDwvApp(null);
         };
@@ -85,21 +254,40 @@ export default function Show({ patient }: any) {
 
     // Load activeScan URL
     useEffect(() => {
-        if (!dwvApp || !activeScan?.dicom_url) {
+        if (!activeScan?.dicom_url) {
             if (activeScan && !activeScan.dicom_url) {
                 setLoadError('لا يوجد ملف DICOM لهذا الفحص.');
             }
             return;
         }
 
-        try {
-            setLoadingDicom(true);
-            setLoadError(null);
-            dwvApp.loadURLs([activeScan.dicom_url]);
-        } catch (err: any) {
-            console.error('[DWV Load Error]', err);
-            setLoadError('خطأ أثناء تشغيل الفحص.');
-            setLoadingDicom(false);
+        setLoadingDicom(true);
+        setLoadError(null);
+        setUseFallback(false);
+
+        if (dwvApp) {
+            try {
+                dwvApp.loadURLs([activeScan.dicom_url]);
+            } catch (err: any) {
+                console.error('[DWV Load Error - trying Canvas Fallback]', err);
+                renderFallback(activeScan.dicom_url).then((success) => {
+                    setLoadingDicom(false);
+                    if (success) {
+                        setUseFallback(true);
+                    } else {
+                        setLoadError('خطأ أثناء تشغيل الفحص.');
+                    }
+                });
+            }
+        } else {
+            renderFallback(activeScan.dicom_url).then((success) => {
+                setLoadingDicom(false);
+                if (success) {
+                    setUseFallback(true);
+                } else {
+                    setLoadError('خطأ أثناء تشغيل الفحص.');
+                }
+            });
         }
     }, [activeScan, dwvApp]);
 
@@ -115,8 +303,8 @@ export default function Show({ patient }: any) {
         if (!dwvApp) return;
         try {
             const lg: any = dwvApp.getActiveLayerGroup();
-            const vc = lg?.getViewController?.() || lg?.getActiveViewLayer?.()?.getViewController?.();
-            if (vc) {
+            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
+            if (vc && typeof vc.rotate === 'function') {
                 vc.rotate(angle);
             }
         } catch {}
@@ -126,8 +314,8 @@ export default function Show({ patient }: any) {
         if (!dwvApp) return;
         try {
             const lg: any = dwvApp.getActiveLayerGroup();
-            const vc = lg?.getViewController?.() || lg?.getActiveViewLayer?.()?.getViewController?.();
-            if (vc) {
+            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
+            if (vc && typeof vc.setInvert === 'function') {
                 const newInvert = !isInverted;
                 vc.setInvert(newInvert);
                 setIsInverted(newInvert);
@@ -136,12 +324,17 @@ export default function Show({ patient }: any) {
     };
 
     const reset = () => {
-        if (!dwvApp) return;
-        try {
-            dwvApp.resetZoomPan();
-            dwvApp.resetViews();
-            setIsInverted(false);
-        } catch {}
+        if (dwvApp) {
+            try {
+                dwvApp.resetZoomPan();
+                dwvApp.resetLayout();
+                dwvApp.initWLDisplay();
+                setIsInverted(false);
+            } catch {}
+        }
+        if (activeScan?.dicom_url && useFallback) {
+            renderFallback(activeScan.dicom_url);
+        }
     };
 
     const dlFile = () => {
@@ -155,7 +348,7 @@ export default function Show({ patient }: any) {
     const doPrint = () => {
         const container = containerRef.current;
         if (!container) return;
-        const canvas = container.querySelector('canvas');
+        const canvas = container.querySelector('canvas') || fallbackCanvasRef.current;
         if (!canvas) return;
         const w = window.open('', '_blank');
         if (!w) return;
@@ -193,9 +386,12 @@ export default function Show({ patient }: any) {
 
     // Viewer Canvas Wrapper
     const ViewerCanvas = ({ className = '' }: { className?: string }) => (
-        <div className={`relative overflow-hidden min-h-0 flex-1 ${className}`}>
-            <div id="layerGroup0" className="layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
+        <div ref={containerRef} className={`relative overflow-hidden min-h-0 flex-1 flex items-center justify-center bg-black ${className}`}>
+            <div id="layerGroup0" className={`layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden ${useFallback ? 'hidden' : ''}`}
                 onContextMenu={e=>e.preventDefault()}/>
+
+            <canvas ref={fallbackCanvasRef} className={`max-w-full max-h-full object-contain ${useFallback ? 'block' : 'hidden'}`} />
+
             {loadingDicom && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10 pointer-events-none">
                     <div className="flex flex-col items-center gap-3">
