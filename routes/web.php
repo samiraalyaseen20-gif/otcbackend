@@ -19,7 +19,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::resource('users', \App\Http\Controllers\UserController::class);
-    Route::resource('patients', \App\Http\Controllers\PatientController::class);
+    Route::get('patients', [\App\Http\Controllers\PatientController::class, 'index'])->name('patients.index');
+    Route::get('patients/{patientId}', [\App\Http\Controllers\PatientController::class, 'show'])->name('patients.show');
 });
 
 require __DIR__.'/auth.php';
