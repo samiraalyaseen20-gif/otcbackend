@@ -53,7 +53,7 @@ export default function Show({ patient }: any) {
         const app = new App();
         const viewConfig = new ViewConfig('dwv-layer-group');
         const options = new AppOptions({ '*': [viewConfig] });
-        options.tools = {
+        (options as any).tools = {
             WindowLevel: {},
             ZoomAndPan: {},
             Draw: {
