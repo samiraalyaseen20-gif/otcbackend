@@ -62,7 +62,17 @@ class ScanController extends Controller
 
         return response()->json([
             'message' => 'DICOM scan uploaded successfully',
-            'data' => $scan,
+            'data' => [
+                'id' => $scan->id,
+                'patient_id' => $scan->patient_id,
+                'patient_name' => $scan->patient_name,
+                'patient_phone' => $scan->patient_phone,
+                'doctor_name' => $scan->doctor_name,
+                'study_date' => $scan->study_date,
+                'file_path' => $scan->file_path,
+                'FileUrl' => Storage::url($scan->file_path),
+                'created_at' => $scan->created_at ? $scan->created_at->format('Y-m-d H:i:s') : null,
+            ],
         ], 201);
     }
 
@@ -122,15 +132,15 @@ class ScanController extends Controller
         $scans = PatientScan::where('patient_id', $patientId)->get();
 
         if ($scans->isEmpty()) {
-            return response()->json(['message' => 'Patient not found'], 404);
+            return response()->json(['message' => 'No scans found for this patient yet'], 200);
         }
 
         foreach ($scans as $scan) {
             $scan->patient_name = $validated['patient_name'];
-            if (isset($validated['patient_phone'])) {
+            if (array_key_exists('patient_phone', $validated)) {
                 $scan->patient_phone = $validated['patient_phone'];
             }
-            if (isset($validated['doctor_name'])) {
+            if (array_key_exists('doctor_name', $validated)) {
                 $scan->doctor_name = $validated['doctor_name'];
             }
             $scan->save();
