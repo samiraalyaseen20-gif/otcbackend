@@ -74,20 +74,22 @@ export default function Show({ patient }: any) {
             setLoadError(activeScan && !activeScan.dicom_url ? 'لا يوجد ملف DICOM لهذا الفحص.' : null);
             return;
         }
-        const el = viewerRef.current;
-        if (!el) return;
+        if (!viewerRef.current) return;
         setLoadError(null);
         setLoadingDicom(true);
 
         const imageId = `wadouri:${activeScan.dicom_url}`;
-        console.log('[DICOM] Loading:', imageId);
-        console.log('[DICOM] WADOLoader available:', typeof cornerstoneWADOImageLoader !== 'undefined');
 
         cornerstone.loadAndCacheImage(imageId)
             .then((image: any) => {
-                console.log('[DICOM] Loaded OK:', image);
-                cornerstone.displayImage(el, image);
-                cornerstone.setViewport(el, cornerstone.getDefaultViewportForImage(el, image));
+                // Always use live ref — captured el can be stale after Inertia page swap
+                const liveEl = viewerRef.current;
+                if (!liveEl) return;
+                // Re-enable if element was unmounted during React re-render
+                try { cornerstone.getEnabledElement(liveEl); }
+                catch { cornerstone.enable(liveEl); }
+                cornerstone.displayImage(liveEl, image);
+                cornerstone.setViewport(liveEl, cornerstone.getDefaultViewportForImage(liveEl, image));
                 setLoadingDicom(false);
             })
             .catch((err: any) => {
