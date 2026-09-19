@@ -40,13 +40,13 @@ export default function Show({ patient }: any) {
 
     // Initialize DWV App
     useEffect(() => {
-        const layerDiv = document.getElementById('dwv-layer-group');
+        const layerDiv = document.getElementById('layerGroup0');
         if (!layerDiv) return;
 
         layerDiv.innerHTML = '';
 
         const app = new App();
-        const viewConfig = new ViewConfig('dwv-layer-group');
+        const viewConfig = new ViewConfig('layerGroup0');
         const options = new AppOptions({ '*': [viewConfig] });
         (options as any).tools = {
             WindowLevel: {},
@@ -194,7 +194,7 @@ export default function Show({ patient }: any) {
     // Viewer Canvas Wrapper
     const ViewerCanvas = ({ className = '' }: { className?: string }) => (
         <div className={`relative overflow-hidden min-h-0 flex-1 ${className}`}>
-            <div id="dwv-layer-group" className="layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
+            <div id="layerGroup0" className="layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
                 onContextMenu={e=>e.preventDefault()}/>
             {loadingDicom && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10 pointer-events-none">
