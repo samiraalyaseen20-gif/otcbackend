@@ -15,7 +15,6 @@ export default defineConfig({
         alias: {
             '@': path.resolve(__dirname, './resources/js'),
             '@/components': path.resolve(__dirname, './resources/js/Components'),
-            'cornerstone-wado-image-loader': 'cornerstone-wado-image-loader/dist/cornerstoneWADOImageLoaderNoWebWorkers.bundle.min.js',
         },
     },
 });

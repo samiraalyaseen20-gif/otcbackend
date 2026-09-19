@@ -16,11 +16,13 @@ import * as cornerstoneTools from 'cornerstone-tools';
 // @ts-ignore
 import * as cornerstoneMath from 'cornerstone-math';
 // @ts-ignore
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
-// @ts-ignore
 import dicomParser from 'dicom-parser';
 // @ts-ignore
 import Hammer from 'hammerjs';
+
+// cornerstoneWADOImageLoader is loaded as a classic <script> in app.blade.php
+// to avoid Webpack 5's Automatic publicPath error in ES module context
+declare const cornerstoneWADOImageLoader: any;
 
 // ── One-time Cornerstone setup ──────────────────────────────────
 let _initialized = false;
