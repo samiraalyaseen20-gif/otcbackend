@@ -47,12 +47,12 @@ export default function Show({ patient }: any) {
     ensureInit();
 
     const viewerRef      = useRef<HTMLDivElement>(null);
-    const [activeTool, setActiveTool]       = useState('Wwwc');
-    const [activeScan, setActiveScan]       = useState<any>(patient.scans?.[0] ?? null);
-    const [loadError, setLoadError]         = useState<string | null>(null);
-    const [loadingDicom, setLoadingDicom]   = useState(false);
-    const [csEnabled, setCsEnabled]         = useState(false);
-    const [scansOpen, setScansOpen]         = useState(false);   // mobile panel toggle
+    const [activeTool, setActiveTool]     = useState('Wwwc');
+    const [activeScan, setActiveScan]     = useState<any>(patient.scans?.[0] ?? null);
+    const [loadError, setLoadError]       = useState<string | null>(null);
+    const [loadingDicom, setLoadingDicom] = useState(false);
+    const [csEnabled, setCsEnabled]       = useState(false);
+    const [scansOpen, setScansOpen]       = useState(false);
 
     // Enable cornerstone once
     useEffect(() => {
@@ -96,48 +96,105 @@ export default function Show({ patient }: any) {
         setActiveTool(toolId);
     };
 
-    const vp = () => { const el = viewerRef.current; if (!el) return null; try { return cornerstone.getViewport(el); } catch { return null; } };
-    const setVp = (v: any) => { const el = viewerRef.current; if (!el) return; try { cornerstone.setViewport(el, v); } catch {} };
-
-    const rotate  = (d: number) => { const v = vp(); if (!v) return; v.rotation = (v.rotation ?? 0) + d; setVp(v); };
-    const flip    = (a: 'h'|'v') => { const v = vp(); if (!v) return; if (a==='h') v.hflip=!v.hflip; else v.vflip=!v.vflip; setVp(v); };
-    const invert  = () => { const v = vp(); if (!v) return; v.invert=!v.invert; setVp(v); };
-    const reset   = () => { const el = viewerRef.current; if (!el) return; try { const im=cornerstone.getImage(el); setVp(cornerstone.getDefaultViewportForImage(el,im)); } catch {} };
-    const download = () => { if (!activeScan?.dicom_url) return; const a=document.createElement('a'); a.href=activeScan.dicom_url; a.download=`scan_${activeScan.id}.dcm`; a.click(); };
-    const print    = () => {
+    const getVp   = () => { const el = viewerRef.current; if (!el) return null; try { return cornerstone.getViewport(el); } catch { return null; } };
+    const setVp   = (v: any) => { const el = viewerRef.current; if (!el) return; try { cornerstone.setViewport(el, v); } catch {} };
+    const rotate  = (d: number) => { const v = getVp(); if (!v) return; v.rotation = (v.rotation ?? 0) + d; setVp(v); };
+    const flip    = (a: 'h' | 'v') => { const v = getVp(); if (!v) return; if (a === 'h') v.hflip = !v.hflip; else v.vflip = !v.vflip; setVp(v); };
+    const invert  = () => { const v = getVp(); if (!v) return; v.invert = !v.invert; setVp(v); };
+    const reset   = () => { const el = viewerRef.current; if (!el) return; try { const im = cornerstone.getImage(el); setVp(cornerstone.getDefaultViewportForImage(el, im)); } catch {} };
+    const dlFile  = () => { if (!activeScan?.dicom_url) return; const a = document.createElement('a'); a.href = activeScan.dicom_url; a.download = `scan_${activeScan.id}.dcm`; a.click(); };
+    const doPrint = () => {
         const el = viewerRef.current; if (!el) return;
         const canvas = (el as any).querySelector('canvas'); if (!canvas) return;
-        const w = window.open('','_blank'); if (!w) return;
+        const w = window.open('', '_blank'); if (!w) return;
         w.document.write(`<img src="${canvas.toDataURL('image/png')}" style="max-width:100%"/>`);
         w.document.close(); w.print();
     };
 
     const handleScanSelect = (scan: any) => {
         setActiveScan(scan);
-        setScansOpen(false);   // auto-close on mobile after pick
+        setScansOpen(false);
     };
 
-    const ScansListContent = () => (
+    // ── Shared toolbar ───────────────────────────────────────────
+    const Toolbar = () => (
+        <div className="bg-[#1a1a1a] border-b border-[#333] px-2 py-2 overflow-x-auto flex-shrink-0">
+            <div className="flex items-center gap-1 min-w-max">
+                {TOOLS.map(tool => (
+                    <button key={tool.id} title={tool.label} onClick={() => selectTool(tool.id)}
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                            activeTool === tool.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-[#e0e0e0] hover:bg-white/10'
+                        }`}>
+                        <tool.icon className="h-4 w-4" /><span>{tool.label}</span>
+                    </button>
+                ))}
+                <div className="w-px h-5 bg-[#444] mx-1" />
+                <button onClick={() => rotate(90)}   title="تدوير يمين"   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
+                <button onClick={() => rotate(-90)}  title="تدوير يسار"   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCcw className="h-4 w-4" /></button>
+                <button onClick={() => flip('h')}    title="انعكاس أفقي"  className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipHorizontal className="h-4 w-4" /></button>
+                <button onClick={() => flip('v')}    title="انعكاس عمودي" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipVertical className="h-4 w-4" /></button>
+                <div className="w-px h-5 bg-[#444] mx-1" />
+                <button onClick={invert}  title="عكس الألوان" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><SlidersHorizontal className="h-4 w-4" /></button>
+                <button onClick={reset}   title="إعادة ضبط"   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RefreshCw className="h-4 w-4" /></button>
+                <button onClick={doPrint} title="طباعة"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Printer className="h-4 w-4" /></button>
+                <button onClick={dlFile}  title="تحميل"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Download className="h-4 w-4" /></button>
+            </div>
+        </div>
+    );
+
+    // ── Shared viewer canvas ──────────────────────────────────────
+    const ViewerCanvas = () => (
+        <div className="flex-1 relative overflow-hidden min-h-0">
+            <div ref={viewerRef} className="absolute inset-0 w-full h-full cursor-crosshair"
+                onContextMenu={e => e.preventDefault()} />
+            {loadingDicom && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        <p className="text-white text-sm">جاري تحميل DICOM...</p>
+                    </div>
+                </div>
+            )}
+            {loadError && !loadingDicom && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                    <div className="text-center text-white/70 px-6">
+                        <FileImage className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm">{loadError}</p>
+                    </div>
+                </div>
+            )}
+            {!activeScan && !loadingDicom && !loadError && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <div className="text-center text-white/40 px-6">
+                        <FileImage className="h-16 w-16 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm">اختر فحصاً من القائمة</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    // ── Scans list content ────────────────────────────────────────
+    const ScansList = () => (
         <div className="space-y-2 p-3">
             {(patient.scans ?? []).length === 0 ? (
                 <p className="text-center text-muted-foreground text-sm py-4">لا توجد فحوصات</p>
             ) : (patient.scans ?? []).map((scan: any) => {
                 const isActive = activeScan?.id === scan.id;
                 return (
-                    <button
-                        key={scan.id}
-                        onClick={() => handleScanSelect(scan)}
+                    <button key={scan.id} onClick={() => handleScanSelect(scan)}
                         className={`w-full text-right rounded-lg p-3 transition-all border ${
                             isActive
                                 ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                                 : 'bg-muted/40 hover:bg-muted border-transparent'
-                        }`}
-                    >
+                        }`}>
                         <div className="flex items-start gap-2">
                             <FileImage className={`h-4 w-4 mt-0.5 shrink-0 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                             <div className="min-w-0">
-                                <p className={`font-bold text-xs leading-tight ${isActive ? '' : ''}`}>
-                                    {scan.study_date ? `تاريخ الفحص: ${scan.study_date}` : 'تاريخ الفحص: غير محدد'}
+                                <p className="font-bold text-xs leading-tight">
+                                    {scan.study_date ? `تاريخ الفحص: ${scan.study_date}` : 'تاريخ غير محدد'}
                                 </p>
                                 {scan.doctor_name && (
                                     <p className={`text-xs mt-0.5 ${isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
@@ -150,9 +207,7 @@ export default function Show({ patient }: any) {
                                     </p>
                                 )}
                                 {!scan.dicom_url && (
-                                    <p className={`text-xs mt-1 ${isActive ? 'text-yellow-200' : 'text-yellow-600'}`}>
-                                        ⚠ لا يوجد ملف DICOM
-                                    </p>
+                                    <p className={`text-xs mt-1 ${isActive ? 'text-yellow-200' : 'text-yellow-600'}`}>⚠ لا يوجد ملف DICOM</p>
                                 )}
                             </div>
                         </div>
@@ -166,114 +221,71 @@ export default function Show({ patient }: any) {
         <AuthenticatedLayout header={`سجل المريض: ${patient.patient_name}`}>
             <Head title={`المريض - ${patient.patient_name}`} />
 
-            {/* ── MOBILE layout ─────────────────────────────────── */}
-            <div className="flex flex-col gap-3 md:hidden" dir="rtl">
+            {/* ════════════════════════════════════════════════════
+                MOBILE  (< md)
+                — negative margin to escape the p-4 padding of <main>
+                — full viewport height minus the top navbar (h-14 = 56px)
+            ════════════════════════════════════════════════════ */}
+            <div className="md:hidden -mx-4 -mt-4 -mb-24" dir="rtl"
+                 style={{ height: 'calc(100dvh - 56px)' }}>
 
-                {/* Back + Patient info */}
-                <div className="flex items-center gap-3 bg-card p-3 rounded-xl border border-border shadow-sm">
-                    <Link href={route('patients.index')}>
-                        <Button variant="outline" size="sm" className="gap-1 h-8 px-2">
-                            <ArrowRight className="h-4 w-4" />
-                        </Button>
-                    </Link>
-                    <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm leading-tight truncate">{patient.patient_name}</p>
-                        {patient.doctor_name && (
-                            <p className="text-xs text-muted-foreground leading-tight truncate">الطبيب: {patient.doctor_name}</p>
-                        )}
-                    </div>
-                </div>
+                <div className="flex flex-col h-full">
 
-                {/* Scans toggle */}
-                <button
-                    onClick={() => setScansOpen(o => !o)}
-                    className="flex items-center justify-between bg-card px-4 py-3 rounded-xl border border-border shadow-sm w-full text-right"
-                >
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                        <FileImage className="h-4 w-4 text-primary" />
-                        سجل الفحوصات
-                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                            {patient.scans?.length ?? 0}
-                        </span>
-                        {activeScan && (
-                            <span className="text-xs text-muted-foreground font-normal">
-                                | محدد: {activeScan.study_date ?? 'بدون تاريخ'}
-                            </span>
-                        )}
-                    </div>
-                    {scansOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                </button>
-
-                {/* Collapsible scans list */}
-                {scansOpen && (
-                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-                        <ScansListContent />
-                    </div>
-                )}
-
-                {/* DICOM Viewer (mobile) */}
-                <div className="bg-[#050505] rounded-xl border border-border shadow-sm overflow-hidden">
-                    {/* Toolbar (scrollable on mobile) */}
-                    <div className="bg-[#1a1a1a] border-b border-[#333] px-2 py-2 overflow-x-auto">
-                        <div className="flex items-center gap-1 min-w-max">
-                            {TOOLS.map(tool => (
-                                <button key={tool.id} title={tool.label}
-                                    onClick={() => selectTool(tool.id)}
-                                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
-                                        activeTool === tool.id
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-[#e0e0e0] hover:bg-white/10'
-                                    }`}>
-                                    <tool.icon className="h-4 w-4" />
-                                    <span>{tool.label}</span>
-                                </button>
-                            ))}
-                            <div className="w-px h-5 bg-[#444] mx-1" />
-                            <button onClick={() => rotate(90)}  title="تدوير يمين" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCw   className="h-4 w-4" /></button>
-                            <button onClick={() => rotate(-90)} title="تدوير يسار" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCcw  className="h-4 w-4" /></button>
-                            <button onClick={() => flip('h')}   title="انعكاس أفقي" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipHorizontal className="h-4 w-4" /></button>
-                            <button onClick={() => flip('v')}   title="انعكاس عمودي" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipVertical   className="h-4 w-4" /></button>
-                            <div className="w-px h-5 bg-[#444] mx-1" />
-                            <button onClick={invert}   title="عكس الألوان" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><SlidersHorizontal className="h-4 w-4" /></button>
-                            <button onClick={reset}    title="إعادة ضبط"   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RefreshCw className="h-4 w-4" /></button>
-                            <button onClick={print}    title="طباعة"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Printer   className="h-4 w-4" /></button>
-                            <button onClick={download} title="تحميل"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Download  className="h-4 w-4" /></button>
+                    {/* ─ Back bar ─ */}
+                    <div className="flex items-center gap-3 bg-card px-3 py-2.5 border-b border-border flex-shrink-0">
+                        <Link href={route('patients.index')}>
+                            <Button variant="outline" size="sm" className="gap-1 h-8 px-2.5">
+                                <ArrowRight className="h-4 w-4" />
+                                رجوع
+                            </Button>
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm leading-tight truncate">{patient.patient_name}</p>
+                            {patient.doctor_name && (
+                                <p className="text-xs text-muted-foreground truncate">الطبيب: {patient.doctor_name}</p>
+                            )}
                         </div>
                     </div>
 
-                    {/* Viewer */}
-                    <div className="relative" style={{ height: '60vw', minHeight: '280px', maxHeight: '480px' }}>
-                        <div ref={viewerRef} className="absolute inset-0 w-full h-full cursor-crosshair"
-                            onContextMenu={e => e.preventDefault()} />
-                        {loadingDicom && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-                                <div className="flex flex-col items-center gap-3">
-                                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                                    <p className="text-white text-sm">جاري تحميل DICOM...</p>
-                                </div>
-                            </div>
-                        )}
-                        {loadError && !loadingDicom && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-                                <div className="text-center text-white/70 px-6">
-                                    <FileImage className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                                    <p className="text-sm">{loadError}</p>
-                                </div>
-                            </div>
-                        )}
-                        {!activeScan && !loadingDicom && !loadError && (
-                            <div className="absolute inset-0 flex items-center justify-center z-10">
-                                <div className="text-center text-white/40 px-6">
-                                    <FileImage className="h-14 w-14 mx-auto mb-3 opacity-20" />
-                                    <p className="text-sm">اختر فحصاً من القائمة أعلاه</p>
-                                </div>
-                            </div>
-                        )}
+                    {/* ─ Scans toggle ─ */}
+                    <button onClick={() => setScansOpen(o => !o)}
+                        className="flex items-center justify-between bg-card px-4 py-2.5 border-b border-border w-full text-right flex-shrink-0">
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                            <FileImage className="h-4 w-4 text-primary" />
+                            سجل الفحوصات
+                            <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                                {patient.scans?.length ?? 0}
+                            </span>
+                            {activeScan && (
+                                <span className="text-xs text-muted-foreground font-normal hidden xs:inline">
+                                    | {activeScan.study_date ?? 'بدون تاريخ'}
+                                </span>
+                            )}
+                        </div>
+                        {scansOpen
+                            ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+
+                    {/* ─ Collapsible scans list (max-h so viewer stays visible) ─ */}
+                    {scansOpen && (
+                        <div className="bg-card border-b border-border overflow-y-auto flex-shrink-0"
+                             style={{ maxHeight: '45%' }}>
+                            <ScansList />
+                        </div>
+                    )}
+
+                    {/* ─ DICOM viewer — fills ALL remaining space ─ */}
+                    <div className="flex flex-col flex-1 min-h-0 bg-[#050505]">
+                        <Toolbar />
+                        <ViewerCanvas />
                     </div>
                 </div>
             </div>
 
-            {/* ── DESKTOP layout ────────────────────────────────── */}
+            {/* ════════════════════════════════════════════════════
+                DESKTOP  (≥ md)
+            ════════════════════════════════════════════════════ */}
             <div className="hidden md:flex flex-col gap-4 h-[calc(100vh-130px)]" dir="rtl">
 
                 {/* Top Header */}
@@ -302,10 +314,10 @@ export default function Show({ patient }: any) {
                     </div>
                 </div>
 
-                {/* Main body */}
+                {/* Body */}
                 <div className="flex gap-4 flex-1 min-h-0">
 
-                    {/* LEFT: Scans List */}
+                    {/* LEFT: Scans */}
                     <div className="w-72 flex-shrink-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
                         <div className="px-4 py-3 border-b border-border flex-shrink-0">
                             <h2 className="font-bold text-sm flex items-center gap-2">
@@ -317,68 +329,14 @@ export default function Show({ patient }: any) {
                             </h2>
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                            <ScansListContent />
+                            <ScansList />
                         </div>
                     </div>
 
                     {/* RIGHT: DICOM Viewer */}
                     <div className="flex-1 bg-[#050505] rounded-xl border border-border shadow-sm overflow-hidden flex flex-col min-w-0">
-
-                        {/* Toolbar */}
-                        <div className="bg-[#1a1a1a] border-b border-[#333] px-3 py-2 flex items-center gap-1 flex-wrap flex-shrink-0">
-                            {TOOLS.map(tool => (
-                                <button key={tool.id} title={tool.id}
-                                    onClick={() => selectTool(tool.id)}
-                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${
-                                        activeTool === tool.id
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-[#e0e0e0] hover:bg-white/10'
-                                    }`}>
-                                    <tool.icon className="h-4 w-4" />
-                                    <span>{tool.label}</span>
-                                </button>
-                            ))}
-                            <div className="w-px h-5 bg-[#444] mx-1" />
-                            <button onClick={() => rotate(90)}  title="تدوير يمين"  className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCw   className="h-4 w-4" /></button>
-                            <button onClick={() => rotate(-90)} title="تدوير يسار"  className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RotateCcw  className="h-4 w-4" /></button>
-                            <button onClick={() => flip('h')}   title="انعكاس أفقي" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipHorizontal className="h-4 w-4" /></button>
-                            <button onClick={() => flip('v')}   title="انعكاس عمودي" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><FlipVertical   className="h-4 w-4" /></button>
-                            <div className="w-px h-5 bg-[#444] mx-1" />
-                            <button onClick={invert}   title="عكس الألوان" className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><SlidersHorizontal className="h-4 w-4" /></button>
-                            <button onClick={reset}    title="إعادة ضبط"   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><RefreshCw className="h-4 w-4" /></button>
-                            <button onClick={print}    title="طباعة"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Printer   className="h-4 w-4" /></button>
-                            <button onClick={download} title="تحميل"        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10"><Download  className="h-4 w-4" /></button>
-                        </div>
-
-                        {/* Viewer area */}
-                        <div className="flex-1 relative overflow-hidden">
-                            <div ref={viewerRef} className="absolute inset-0 w-full h-full cursor-crosshair"
-                                onContextMenu={e => e.preventDefault()} />
-                            {loadingDicom && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                                        <p className="text-white text-sm">جاري تحميل صورة DICOM...</p>
-                                    </div>
-                                </div>
-                            )}
-                            {loadError && !loadingDicom && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-                                    <div className="text-center text-white/70 px-8">
-                                        <FileImage className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                                        <p className="text-base">{loadError}</p>
-                                    </div>
-                                </div>
-                            )}
-                            {!activeScan && !loadingDicom && !loadError && (
-                                <div className="absolute inset-0 flex items-center justify-center z-10">
-                                    <div className="text-center text-white/40 px-8">
-                                        <FileImage className="h-20 w-20 mx-auto mb-4 opacity-20" />
-                                        <p className="text-lg">اختر فحصاً من القائمة لعرض الصورة</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <Toolbar />
+                        <ViewerCanvas />
                     </div>
                 </div>
             </div>
