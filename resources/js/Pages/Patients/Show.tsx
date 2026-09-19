@@ -121,7 +121,8 @@ export default function Show({ patient }: any) {
     const rotate = (angle: number) => {
         if (!dwvApp) return;
         try {
-            const vc = dwvApp.getActiveLayerGroup()?.getViewController();
+            const lg: any = dwvApp.getActiveLayerGroup();
+            const vc = lg?.getViewController?.() || lg?.getActiveViewLayer?.()?.getViewController?.();
             if (vc) {
                 vc.rotate(angle);
             }
@@ -131,7 +132,8 @@ export default function Show({ patient }: any) {
     const toggleInvert = () => {
         if (!dwvApp) return;
         try {
-            const vc = dwvApp.getActiveLayerGroup()?.getViewController();
+            const lg: any = dwvApp.getActiveLayerGroup();
+            const vc = lg?.getViewController?.() || lg?.getActiveViewLayer?.()?.getViewController?.();
             if (vc) {
                 const newInvert = !isInverted;
                 vc.setInvert(newInvert);
