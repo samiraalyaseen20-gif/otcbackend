@@ -33,6 +33,14 @@ function ensureGlobalInit() {
     cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
     cornerstoneWADOImageLoader.external.cornerstone  = cornerstone;
     cornerstoneWADOImageLoader.external.dicomParser  = dicomParser;
+    
+    // Disable web workers so DICOM is decoded synchronously without worker 404 errors
+    try {
+        cornerstoneWADOImageLoader.configure({
+            useWebWorkers: false,
+        });
+    } catch {}
+
     cornerstoneTools.init();
     // Register tools globally once
     try { cornerstoneTools.addTool(cornerstoneTools.WwwcTool); }   catch {}
@@ -108,8 +116,29 @@ export default function Show({ patient }: any) {
                     cornerstone.enable(liveEl);
                     try { cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 }); } catch {}
                 }
+                
+                cornerstone.resize(liveEl, true);
                 cornerstone.displayImage(liveEl, image);
-                cornerstone.setViewport(liveEl, cornerstone.getDefaultViewportForImage(liveEl, image));
+
+                let viewport = cornerstone.getDefaultViewportForImage(liveEl, image);
+
+                // Fix Black Screen: calculate valid windowWidth & windowCenter if undefined or 0
+                if (!viewport.voi || !viewport.voi.windowWidth || viewport.voi.windowWidth <= 1) {
+                    const min = typeof image.minPixelValue === 'number' ? image.minPixelValue : 0;
+                    const max = typeof image.maxPixelValue === 'number' ? image.maxPixelValue : 255;
+                    let ww = image.windowWidth;
+                    let wc = image.windowCenter;
+                    if (!ww || ww <= 1) {
+                        ww = max > min ? max - min : 255;
+                    }
+                    if (!wc && wc !== 0) {
+                        wc = min + ww / 2;
+                    }
+                    viewport.voi = { windowWidth: ww, windowCenter: wc };
+                }
+
+                cornerstone.setViewport(liveEl, viewport);
+                cornerstone.fitToWindow(liveEl);
                 setLoadingDicom(false);
             })
             .catch((err: any) => {
