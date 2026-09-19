@@ -78,13 +78,20 @@ export default function Show({ patient }: any) {
         if (!el) return;
         setLoadError(null);
         setLoadingDicom(true);
-        cornerstone.loadAndCacheImage(`wadouri:${activeScan.dicom_url}`)
+
+        const imageId = `wadouri:${activeScan.dicom_url}`;
+        console.log('[DICOM] Loading:', imageId);
+        console.log('[DICOM] WADOLoader available:', typeof cornerstoneWADOImageLoader !== 'undefined');
+
+        cornerstone.loadAndCacheImage(imageId)
             .then((image: any) => {
+                console.log('[DICOM] Loaded OK:', image);
                 cornerstone.displayImage(el, image);
                 cornerstone.setViewport(el, cornerstone.getDefaultViewportForImage(el, image));
                 setLoadingDicom(false);
             })
-            .catch(() => {
+            .catch((err: any) => {
+                console.error('[DICOM] Load FAILED:', err?.message ?? err);
                 setLoadError('تعذّر تحميل صورة DICOM.');
                 setLoadingDicom(false);
             });
