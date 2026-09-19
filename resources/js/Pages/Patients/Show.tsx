@@ -114,9 +114,6 @@ export default function Show({ patient }: any) {
         if (!dwvApp) return;
         try {
             dwvApp.setTool(toolId);
-            if (toolId === 'Draw') {
-                dwvApp.setDrawShape('Line');
-            }
             setActiveTool(toolId);
         } catch {}
     };
