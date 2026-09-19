@@ -56,9 +56,7 @@ export default function Show({ patient }: any) {
         (options as any).tools = {
             WindowLevel: {},
             ZoomAndPan: {},
-            Draw: {
-                options: ['Line']
-            }
+            Draw: {}
         };
 
         app.init(options);
