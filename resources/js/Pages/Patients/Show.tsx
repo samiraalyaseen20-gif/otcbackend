@@ -40,15 +40,10 @@ export default function Show({ patient }: any) {
 
     // Initialize DWV App
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
+        const layerDiv = document.getElementById('dwv-layer-group');
+        if (!layerDiv) return;
 
-        container.innerHTML = '';
-
-        const layerDiv = document.createElement('div');
-        layerDiv.id = 'dwv-layer-group';
-        layerDiv.className = 'layerGroup relative w-full h-full flex items-center justify-center';
-        container.appendChild(layerDiv);
+        layerDiv.innerHTML = '';
 
         const app = new App();
         const viewConfig = new ViewConfig('dwv-layer-group');
@@ -199,10 +194,10 @@ export default function Show({ patient }: any) {
     // Viewer Canvas Wrapper
     const ViewerCanvas = ({ className = '' }: { className?: string }) => (
         <div className={`relative overflow-hidden min-h-0 flex-1 ${className}`}>
-            <div ref={containerRef} className="absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
+            <div id="dwv-layer-group" className="layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
                 onContextMenu={e=>e.preventDefault()}/>
             {loadingDicom && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10 pointer-events-none">
                     <div className="flex flex-col items-center gap-3">
                         <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin"/>
                         <p className="text-white text-sm">جاري تشغيل صورة DICOM...</p>
@@ -210,7 +205,7 @@ export default function Show({ patient }: any) {
                 </div>
             )}
             {loadError && !loadingDicom && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 pointer-events-none">
                     <div className="text-center text-white/70 px-6">
                         <FileImage className="h-12 w-12 mx-auto mb-3 opacity-20"/>
                         <p className="text-sm">{loadError}</p>
@@ -218,7 +213,7 @@ export default function Show({ patient }: any) {
                 </div>
             )}
             {!activeScan && !loadingDicom && !loadError && (
-                <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
                     <div className="text-center text-white/40 px-6">
                         <FileImage className="h-16 w-16 mx-auto mb-3 opacity-20"/>
                         <p className="text-sm">اختر فحصاً من القائمة</p>
