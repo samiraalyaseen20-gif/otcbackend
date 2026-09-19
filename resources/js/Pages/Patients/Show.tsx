@@ -4,74 +4,32 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Button } from '@/components/ui/button';
 import {
     ArrowRight, FileImage, ChevronDown, ChevronUp,
-    ZoomIn, Move, Sun, Ruler, RotateCcw, RotateCw,
-    FlipHorizontal, FlipVertical, RefreshCw, Download, Printer,
-    SlidersHorizontal
+    ZoomIn, Move, Sun, Ruler, RotateCw,
+    RefreshCw, Download, Printer, SlidersHorizontal
 } from 'lucide-react';
 
-// @ts-ignore
-import * as cornerstone from 'cornerstone-core';
-// @ts-ignore
-import * as cornerstoneTools from 'cornerstone-tools';
-// @ts-ignore
-import * as cornerstoneMath from 'cornerstone-math';
-// @ts-ignore
-import dicomParser from 'dicom-parser';
-// @ts-ignore
-import Hammer from 'hammerjs';
-
-// cornerstoneWADOImageLoader is loaded as a classic <script> in app.blade.php
-declare const cornerstoneWADOImageLoader: any;
-
-// ── One-time global Cornerstone init ──────────────────────────
-let _initialized = false;
-function ensureGlobalInit() {
-    if (_initialized) return;
-    _initialized = true;
-    cornerstoneTools.external.cornerstone   = cornerstone;
-    cornerstoneTools.external.Hammer        = Hammer;
-    cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
-    cornerstoneWADOImageLoader.external.cornerstone  = cornerstone;
-    cornerstoneWADOImageLoader.external.dicomParser  = dicomParser;
-    
-    // Disable web workers so DICOM is decoded synchronously without worker 404 errors
-    try {
-        cornerstoneWADOImageLoader.configure({
-            useWebWorkers: false,
-        });
-    } catch {}
-
-    cornerstoneTools.init();
-    // Register tools globally once
-    try { cornerstoneTools.addTool(cornerstoneTools.WwwcTool); }   catch {}
-    try { cornerstoneTools.addTool(cornerstoneTools.PanTool); }    catch {}
-    try { cornerstoneTools.addTool(cornerstoneTools.ZoomTool); }   catch {}
-    try { cornerstoneTools.addTool(cornerstoneTools.LengthTool); } catch {}
-}
+import { App, AppOptions, ViewConfig } from 'dwv';
 
 const TOOLS = [
-    { id: 'Wwwc',   label: 'تباين', icon: Sun },
-    { id: 'Pan',    label: 'تحريك', icon: Move },
-    { id: 'Zoom',   label: 'تكبير', icon: ZoomIn },
-    { id: 'Length', label: 'قياس',  icon: Ruler },
+    { id: 'WindowLevel', label: 'تباين', icon: Sun },
+    { id: 'ZoomAndPan',  label: 'تحريك وتكبير', icon: Move },
+    { id: 'Draw',        label: 'قياس', icon: Ruler },
 ];
 
 export default function Show({ patient }: any) {
-    ensureGlobalInit();
-
-    const viewerRef      = useRef<HTMLDivElement>(null);
-    const [activeTool, setActiveTool]     = useState('Wwwc');
-    const [activeScan, setActiveScan]     = useState<any>(patient.scans?.[0] ?? null);
-    const [loadError, setLoadError]       = useState<string | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dwvApp, setDwvApp] = useState<App | null>(null);
+    const [activeTool, setActiveTool] = useState('WindowLevel');
+    const [activeScan, setActiveScan] = useState<any>(patient.scans?.[0] ?? null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [loadingDicom, setLoadingDicom] = useState(false);
-    const [csEnabled, setCsEnabled]       = useState(false);
-    const [scansOpen, setScansOpen]       = useState(false);
-    // JS-based breakpoint — avoids two viewer divs sharing the same ref
-    const [isMobile, setIsMobile]         = useState<boolean>(
+    const [isInverted, setIsInverted] = useState(false);
+    const [scansOpen, setScansOpen] = useState(false);
+
+    const [isMobile, setIsMobile] = useState<boolean>(
         typeof window !== 'undefined' ? window.innerWidth < 768 : false
     );
 
-    // Track breakpoint changes
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)');
         setIsMobile(mq.matches);
@@ -80,105 +38,152 @@ export default function Show({ patient }: any) {
         return () => mq.removeEventListener('change', handler);
     }, []);
 
-    // Enable cornerstone on the single viewer element
-    // Re-runs whenever isMobile changes (old element unmounts → new one mounts)
+    // Initialize DWV App
     useEffect(() => {
-        const el = viewerRef.current;
-        if (!el) return;
-        cornerstone.enable(el);
-        // Activate default tool on this element
-        try { cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 }); } catch {}
-        setCsEnabled(true);
-        return () => {
-            try { cornerstone.disable(el); } catch {}
-            setCsEnabled(false);
-        };
-    }, [isMobile]); // re-run when layout switches so new DOM element gets enabled
+        const container = containerRef.current;
+        if (!container) return;
 
-    // Load DICOM when scan or element changes
+        container.innerHTML = '';
+
+        const layerDiv = document.createElement('div');
+        layerDiv.id = 'dwv-layer-group';
+        layerDiv.className = 'layerGroup relative w-full h-full flex items-center justify-center';
+        container.appendChild(layerDiv);
+
+        const app = new App();
+        const viewConfig = new ViewConfig('dwv-layer-group');
+        const options = new AppOptions({ '*': [viewConfig] });
+        options.tools = {
+            WindowLevel: {},
+            ZoomAndPan: {},
+            Draw: {
+                options: ['Line']
+            }
+        };
+
+        app.init(options);
+
+        app.addEventListener('loadstart', () => {
+            setLoadingDicom(true);
+            setLoadError(null);
+        });
+
+        app.addEventListener('loadend', () => {
+            setLoadingDicom(false);
+            try {
+                app.setTool('WindowLevel');
+                setActiveTool('WindowLevel');
+            } catch {}
+        });
+
+        app.addEventListener('error', (event: any) => {
+            console.error('[DWV ERROR]', event);
+            setLoadingDicom(false);
+            setLoadError('تعذّر عرض صورة DICOM.');
+        });
+
+        setDwvApp(app);
+
+        return () => {
+            try { app.reset(); } catch {}
+            setDwvApp(null);
+        };
+    }, [isMobile]);
+
+    // Load activeScan URL
     useEffect(() => {
-        if (!csEnabled || !activeScan?.dicom_url) {
-            setLoadError(activeScan && !activeScan.dicom_url ? 'لا يوجد ملف DICOM لهذا الفحص.' : null);
+        if (!dwvApp || !activeScan?.dicom_url) {
+            if (activeScan && !activeScan.dicom_url) {
+                setLoadError('لا يوجد ملف DICOM لهذا الفحص.');
+            }
             return;
         }
-        if (!viewerRef.current) return;
-        setLoadError(null);
-        setLoadingDicom(true);
 
-        const imageId = `wadouri:${activeScan.dicom_url}`;
-        cornerstone.loadAndCacheImage(imageId)
-            .then((image: any) => {
-                const liveEl = viewerRef.current;
-                if (!liveEl) return;
-                // Ensure element is still enabled
-                try { cornerstone.getEnabledElement(liveEl); }
-                catch {
-                    cornerstone.enable(liveEl);
-                    try { cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 }); } catch {}
-                }
-                
-                cornerstone.resize(liveEl, true);
-                cornerstone.displayImage(liveEl, image);
-
-                let viewport = cornerstone.getDefaultViewportForImage(liveEl, image);
-
-                // Fix Black Screen: calculate valid windowWidth & windowCenter if undefined or 0
-                if (!viewport.voi || !viewport.voi.windowWidth || viewport.voi.windowWidth <= 1) {
-                    const min = typeof image.minPixelValue === 'number' ? image.minPixelValue : 0;
-                    const max = typeof image.maxPixelValue === 'number' ? image.maxPixelValue : 255;
-                    let ww = image.windowWidth;
-                    let wc = image.windowCenter;
-                    if (!ww || ww <= 1) {
-                        ww = max > min ? max - min : 255;
-                    }
-                    if (!wc && wc !== 0) {
-                        wc = min + ww / 2;
-                    }
-                    viewport.voi = { windowWidth: ww, windowCenter: wc };
-                }
-
-                cornerstone.setViewport(liveEl, viewport);
-                cornerstone.fitToWindow(liveEl);
-                setLoadingDicom(false);
-            })
-            .catch((err: any) => {
-                console.error('[DICOM] Load FAILED:', err?.message ?? err);
-                setLoadError('تعذّر تحميل صورة DICOM.');
-                setLoadingDicom(false);
-            });
-    }, [activeScan, csEnabled]);
-
-    // ── Viewport helpers ──────────────────────────────────────
-    const getVp  = () => { try { return cornerstone.getViewport(viewerRef.current); } catch { return null; } };
-    const applyVp = (v: any) => { try { cornerstone.setViewport(viewerRef.current, v); } catch {} };
-    const rotate  = (d: number) => { const v = getVp(); if (!v) return; v.rotation = (v.rotation ?? 0) + d; applyVp(v); };
-    const flip    = (a: 'h'|'v') => { const v = getVp(); if (!v) return; if (a==='h') v.hflip=!v.hflip; else v.vflip=!v.vflip; applyVp(v); };
-    const invert  = () => { const v = getVp(); if (!v) return; v.invert=!v.invert; applyVp(v); };
-    const reset   = () => { const el=viewerRef.current; if (!el) return; try { applyVp(cornerstone.getDefaultViewportForImage(el, cornerstone.getImage(el))); } catch {} };
-    const dlFile  = () => { if (!activeScan?.dicom_url) return; const a=document.createElement('a'); a.href=activeScan.dicom_url; a.download=`scan_${activeScan.id}.dcm`; a.click(); };
-    const doPrint = () => {
-        const el=viewerRef.current; if (!el) return;
-        const canvas=(el as any).querySelector('canvas'); if (!canvas) return;
-        const w=window.open('','_blank'); if (!w) return;
-        w.document.write(`<img src="${canvas.toDataURL('image/png')}" style="max-width:100%"/>`);
-        w.document.close(); w.print();
-    };
+        try {
+            setLoadingDicom(true);
+            setLoadError(null);
+            dwvApp.loadURLs([activeScan.dicom_url]);
+        } catch (err: any) {
+            console.error('[DWV Load Error]', err);
+            setLoadError('خطأ أثناء تشغيل الفحص.');
+            setLoadingDicom(false);
+        }
+    }, [activeScan, dwvApp]);
 
     const selectTool = (toolId: string) => {
-        ['Wwwc','Pan','Zoom','Length'].forEach(t => { try { cornerstoneTools.setToolPassive(t); } catch {} });
-        try { cornerstoneTools.setToolActive(toolId, { mouseButtonMask: 1 }); } catch {}
-        setActiveTool(toolId);
+        if (!dwvApp) return;
+        try {
+            dwvApp.setTool(toolId);
+            if (toolId === 'Draw') {
+                dwvApp.setDrawShape('Line');
+            }
+            setActiveTool(toolId);
+        } catch {}
     };
 
-    const handleScanSelect = (scan: any) => { setActiveScan(scan); setScansOpen(false); };
+    const rotate = (angle: number) => {
+        if (!dwvApp) return;
+        try {
+            const vc = dwvApp.getActiveLayerGroup()?.getViewController();
+            if (vc) {
+                vc.rotate(angle);
+            }
+        } catch {}
+    };
 
-    // ── Shared sub-components ─────────────────────────────────
+    const toggleInvert = () => {
+        if (!dwvApp) return;
+        try {
+            const vc = dwvApp.getActiveLayerGroup()?.getViewController();
+            if (vc) {
+                const newInvert = !isInverted;
+                vc.setInvert(newInvert);
+                setIsInverted(newInvert);
+            }
+        } catch {}
+    };
+
+    const reset = () => {
+        if (!dwvApp) return;
+        try {
+            dwvApp.resetZoomPan();
+            dwvApp.resetViews();
+            setIsInverted(false);
+        } catch {}
+    };
+
+    const dlFile = () => {
+        if (!activeScan?.dicom_url) return;
+        const a = document.createElement('a');
+        a.href = activeScan.dicom_url;
+        a.download = `scan_${activeScan.id}.dcm`;
+        a.click();
+    };
+
+    const doPrint = () => {
+        const container = containerRef.current;
+        if (!container) return;
+        const canvas = container.querySelector('canvas');
+        if (!canvas) return;
+        const w = window.open('', '_blank');
+        if (!w) return;
+        w.document.write(`<img src="${canvas.toDataURL('image/png')}" style="max-width:100%"/>`);
+        w.document.close();
+        w.print();
+    };
+
+    const handleScanSelect = (scan: any) => {
+        setActiveScan(scan);
+        setScansOpen(false);
+    };
+
+    // Toolbar
     const Toolbar = () => (
         <div className="bg-[#1a1a1a] border-b border-[#333] px-2 py-2 overflow-x-auto flex-shrink-0">
             <div className="flex items-center gap-1 min-w-max">
                 {TOOLS.map(T => (
                     <button key={T.id} title={T.label} onClick={() => selectTool(T.id)}
-                        className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${
                             activeTool===T.id ? 'bg-primary text-primary-foreground' : 'text-[#e0e0e0] hover:bg-white/10'
                         }`}>
                         <T.icon className="h-4 w-4"/><span>{T.label}</span>
@@ -186,28 +191,24 @@ export default function Show({ patient }: any) {
                 ))}
                 <div className="w-px h-5 bg-[#444] mx-1"/>
                 <button onClick={()=>rotate(90)}   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تدوير يمين"><RotateCw className="h-4 w-4"/></button>
-                <button onClick={()=>rotate(-90)}  className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تدوير يسار"><RotateCcw className="h-4 w-4"/></button>
-                <button onClick={()=>flip('h')}    className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="انعكاس أفقي"><FlipHorizontal className="h-4 w-4"/></button>
-                <button onClick={()=>flip('v')}    className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="انعكاس عمودي"><FlipVertical className="h-4 w-4"/></button>
-                <div className="w-px h-5 bg-[#444] mx-1"/>
-                <button onClick={invert}   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="عكس الألوان"><SlidersHorizontal className="h-4 w-4"/></button>
-                <button onClick={reset}    className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="إعادة ضبط"><RefreshCw className="h-4 w-4"/></button>
-                <button onClick={doPrint}  className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="طباعة"><Printer className="h-4 w-4"/></button>
-                <button onClick={dlFile}   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تحميل"><Download className="h-4 w-4"/></button>
+                <button onClick={toggleInvert} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="عكس الألوان"><SlidersHorizontal className="h-4 w-4"/></button>
+                <button onClick={reset}        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="إعادة ضبط"><RefreshCw className="h-4 w-4"/></button>
+                <button onClick={doPrint}      className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="طباعة"><Printer className="h-4 w-4"/></button>
+                <button onClick={dlFile}       className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تحميل"><Download className="h-4 w-4"/></button>
             </div>
         </div>
     );
 
-    // Single viewer canvas — always one DOM node
+    // Viewer Canvas Wrapper
     const ViewerCanvas = ({ className = '' }: { className?: string }) => (
-        <div className={`relative overflow-hidden min-h-0 ${className}`}>
-            <div ref={viewerRef} className="absolute inset-0 w-full h-full cursor-crosshair"
+        <div className={`relative overflow-hidden min-h-0 flex-1 ${className}`}>
+            <div ref={containerRef} className="absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden"
                 onContextMenu={e=>e.preventDefault()}/>
             {loadingDicom && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
                     <div className="flex flex-col items-center gap-3">
                         <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin"/>
-                        <p className="text-white text-sm">جاري تحميل DICOM...</p>
+                        <p className="text-white text-sm">جاري تشغيل صورة DICOM...</p>
                     </div>
                 </div>
             )}
@@ -270,9 +271,7 @@ export default function Show({ patient }: any) {
         </div>
     );
 
-    // ═══════════════════════════════════════════════════════════
-    // MOBILE layout  (isMobile === true)
-    // ═══════════════════════════════════════════════════════════
+    // MOBILE layout
     if (isMobile) {
         return (
             <AuthenticatedLayout header={`سجل المريض: ${patient.patient_name}`}>
@@ -315,7 +314,7 @@ export default function Show({ patient }: any) {
                         </div>
                     )}
 
-                    {/* DICOM viewer — single ref, fills remaining height */}
+                    {/* DICOM viewer */}
                     <div className="flex flex-col flex-1 min-h-0 bg-[#050505]">
                         <Toolbar/>
                         <ViewerCanvas className="flex-1"/>
@@ -325,9 +324,7 @@ export default function Show({ patient }: any) {
         );
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // DESKTOP layout  (isMobile === false)
-    // ═══════════════════════════════════════════════════════════
+    // DESKTOP layout
     return (
         <AuthenticatedLayout header={`سجل المريض: ${patient.patient_name}`}>
             <Head title={`المريض - ${patient.patient_name}`}/>
@@ -375,7 +372,7 @@ export default function Show({ patient }: any) {
                         <div className="flex-1 overflow-y-auto"><ScansList/></div>
                     </div>
 
-                    {/* RIGHT: DICOM viewer — single ref */}
+                    {/* RIGHT: DICOM viewer */}
                     <div className="flex-1 bg-[#050505] rounded-xl border border-border shadow-sm overflow-hidden flex flex-col min-w-0">
                         <Toolbar/>
                         <ViewerCanvas className="flex-1"/>
