@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\PatientScan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class PatientController extends Controller
 {
@@ -49,7 +50,9 @@ class PatientController extends Controller
             ->orderByDesc('study_date')
             ->get()
             ->map(function ($scan) {
-                $scan->dicom_url = $scan->file_path ? asset($scan->file_path) : null;
+                // Storage::url() generates /storage/dicom_files/... which is correct
+                // when files are stored via Storage::disk('public') and storage:link exists
+                $scan->dicom_url = $scan->file_path ? Storage::url($scan->file_path) : null;
                 return $scan;
             });
 
