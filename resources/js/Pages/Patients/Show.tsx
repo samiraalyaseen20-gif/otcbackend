@@ -50,6 +50,34 @@ export default function Show({ patient }: any) {
             if (!res.ok) return false;
             const arrayBuffer = await res.arrayBuffer();
             const byteArray = new Uint8Array(arrayBuffer);
+
+            // Check if it's a standard image (JPEG, PNG, BMP) instead of DICOM
+            const isStandardImage = 
+                (byteArray[0] === 0xFF && byteArray[1] === 0xD8) || // JPEG
+                (byteArray[0] === 0x89 && byteArray[1] === 0x50 && byteArray[2] === 0x4E && byteArray[3] === 0x47) || // PNG
+                (byteArray[0] === 0x42 && byteArray[1] === 0x4D); // BMP
+
+            if (isStandardImage) {
+                const blob = new Blob([byteArray]);
+                const imgUrl = URL.createObjectURL(blob);
+                return new Promise<boolean>((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) ctx.drawImage(img, 0, 0, img.width, img.height);
+                        URL.revokeObjectURL(imgUrl);
+                        resolve(true);
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(imgUrl);
+                        resolve(false);
+                    };
+                    img.src = imgUrl;
+                });
+            }
+
             const dataSet = dicomParser.parseDicom(byteArray);
 
             const rows = dataSet.uint16('x00280010');
