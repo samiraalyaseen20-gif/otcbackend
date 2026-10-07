@@ -49,7 +49,7 @@ export default function Index({ patients, filters }: any) {
                             سجل المرضى
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
-                            ابحث عن مريض أو اضغط «عرض السجل» لفتح الملف الطبي وفحوصات الـ DICOM
+                            ابحث عن مريض أو اضغط «عرض السجل» لفتح الملف الطبي وصور وفحوصات OCT
                         </p>
                     </div>
 

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Button } from '@/components/ui/button';
 import {
     ArrowRight, FileImage, ChevronDown, ChevronUp,
-    Move, Sun, Ruler, RotateCw,
+    Move, Sun, Ruler, RotateCw, ZoomIn, ZoomOut,
     RefreshCw, Download, Printer, SlidersHorizontal, AlertCircle
 } from 'lucide-react';
 
@@ -20,14 +20,26 @@ const TOOLS = [
 export default function Show({ patient }: any) {
     const containerRef = useRef<HTMLDivElement>(null);
     const fallbackCanvasRef = useRef<HTMLCanvasElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
+
     const [dwvApp, setDwvApp] = useState<App | null>(null);
-    const [activeTool, setActiveTool] = useState('WindowLevel');
+    const [activeTool, setActiveTool] = useState('ZoomAndPan');
     const [activeScan, setActiveScan] = useState<any>(patient.scans?.[0] ?? null);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [loadingDicom, setLoadingDicom] = useState(false);
+    const [loadingScan, setLoadingScan] = useState(false);
     const [isInverted, setIsInverted] = useState(false);
     const [scansOpen, setScansOpen] = useState(false);
+
+    // Scan type: 'image' (JPG/PNG/BMP) or 'dicom'
+    const [isStandardImage, setIsStandardImage] = useState(true);
     const [useFallback, setUseFallback] = useState(false);
+
+    // Image Transform states (for standard images)
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [rotation, setRotation] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
     const [isMobile, setIsMobile] = useState<boolean>(
         typeof window !== 'undefined' ? window.innerWidth < 768 : false
@@ -41,8 +53,16 @@ export default function Show({ patient }: any) {
         return () => mq.removeEventListener('change', handler);
     }, []);
 
+    // Reset standard image transformations
+    const resetTransform = useCallback(() => {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        setRotation(0);
+        setIsInverted(false);
+    }, []);
+
     // Canvas DICOM Fallback Renderer using dicom-parser
-    const renderFallback = async (url: string) => {
+    const renderDicomFallback = async (url: string) => {
         const canvas = fallbackCanvasRef.current;
         if (!canvas) return false;
         try {
@@ -51,35 +71,18 @@ export default function Show({ patient }: any) {
             const arrayBuffer = await res.arrayBuffer();
             const byteArray = new Uint8Array(arrayBuffer);
 
-            // Check if it's a standard image (JPEG, PNG, BMP) instead of DICOM
-            const isStandardImage = 
+            // Check if it's actually an image
+            const isImg = 
                 (byteArray[0] === 0xFF && byteArray[1] === 0xD8) || // JPEG
                 (byteArray[0] === 0x89 && byteArray[1] === 0x50 && byteArray[2] === 0x4E && byteArray[3] === 0x47) || // PNG
                 (byteArray[0] === 0x42 && byteArray[1] === 0x4D); // BMP
 
-            if (isStandardImage) {
-                const blob = new Blob([byteArray]);
-                const imgUrl = URL.createObjectURL(blob);
-                return new Promise<boolean>((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        if (ctx) ctx.drawImage(img, 0, 0, img.width, img.height);
-                        URL.revokeObjectURL(imgUrl);
-                        resolve(true);
-                    };
-                    img.onerror = () => {
-                        URL.revokeObjectURL(imgUrl);
-                        resolve(false);
-                    };
-                    img.src = imgUrl;
-                });
+            if (isImg) {
+                setIsStandardImage(true);
+                return true;
             }
 
             const dataSet = dicomParser.parseDicom(byteArray);
-
             const rows = dataSet.uint16('x00280010');
             const cols = dataSet.uint16('x00280011');
             if (!rows || !cols) return false;
@@ -192,124 +195,107 @@ export default function Show({ patient }: any) {
         }
     };
 
-    // Initialize DWV App
-    useEffect(() => {
-        const layerDiv = document.getElementById('layerGroup0');
-        if (!layerDiv) return;
-
-        layerDiv.innerHTML = '';
-
-        const app = new App();
-        const viewConfig = new ViewConfig('layerGroup0');
-        const options = new AppOptions({ '*': [viewConfig] });
-        (options as any).tools = {
-            WindowLevel: {},
-            ZoomAndPan: {},
-            Draw: {}
-        };
-
-        app.init(options);
-
-        app.addEventListener('loadstart', () => {
-            setLoadingDicom(true);
-            setLoadError(null);
-            setUseFallback(false);
-        });
-
-        app.addEventListener('loadend', () => {
-            setLoadingDicom(false);
-            try {
-                app.fitToContainer();
-                app.initWLDisplay();
-
-                // Auto-calculate Window Center & Width if needed
-                const dataIds = app.getDataIds();
-                if (dataIds && dataIds.length > 0) {
-                    const dataId = dataIds[0];
-                    const dataObj: any = app.getData(dataId);
-                    const img: any = (app as any).getImage ? (app as any).getImage(dataId) : dataObj?.getImage?.();
-                    if (img && typeof img.getValueRange === 'function') {
-                        const range = img.getValueRange();
-                        if (range && typeof range.min === 'number' && typeof range.max === 'number' && range.max > range.min) {
-                            const width = range.max - range.min;
-                            const center = range.min + width / 2;
-                            const lg: any = app.getActiveLayerGroup();
-                            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
-                            if (vc && typeof vc.setWindowLevel === 'function') {
-                                vc.setWindowLevel(new WindowLevel(center, width));
-                            }
-                        }
-                    }
-                }
-
-                app.setTool('WindowLevel');
-                setActiveTool('WindowLevel');
-            } catch (e) {
-                console.error('[DWV loadend error]', e);
-            }
-        });
-
-        const handleResize = () => {
-            try { app.fitToContainer(); } catch {}
-        };
-        window.addEventListener('resize', handleResize);
-
-        app.addEventListener('error', (event: any) => {
-            console.error('[DWV ERROR - trying Canvas Fallback]', event);
-            if (activeScan?.dicom_url) {
-                renderFallback(activeScan.dicom_url).then((success) => {
-                    setLoadingDicom(false);
-                    if (success) {
-                        setUseFallback(true);
-                    } else {
-                        setLoadError('تعذّر عرض صورة DICOM.');
-                    }
-                });
-            } else {
-                setLoadingDicom(false);
-                setLoadError('تعذّر عرض صورة DICOM.');
-            }
-        });
-
-        setDwvApp(app);
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            try { app.reset(); } catch {}
-            setDwvApp(null);
-        };
-    }, [isMobile]);
-
-    // Load activeScan URL
+    // Detect format and load scan
     useEffect(() => {
         if (!activeScan?.dicom_url) {
             if (activeScan && !activeScan.dicom_url) {
-                setLoadError('لا يوجد ملف DICOM لهذا الفحص.');
+                setLoadError('لا توجد صورة أو ملف لهذا الفحص.');
             }
             return;
         }
 
-        setLoadingDicom(true);
+        setLoadingScan(true);
         setLoadError(null);
         setUseFallback(false);
+        resetTransform();
 
-        if (dwvApp) {
-            try {
-                dwvApp.loadURLs([activeScan.dicom_url]);
-            } catch (err: any) {
-                console.error('[DWV Load Error - trying Canvas Fallback]', err);
-                renderFallback(activeScan.dicom_url).then((success) => {
-                    setLoadingDicom(false);
+        const url = activeScan.dicom_url;
+        const isKnownImage = /\.(jpe?g|png|webp|bmp|gif)(\?.*)?$/i.test(url);
+
+        if (isKnownImage) {
+            setIsStandardImage(true);
+            setLoadingScan(false);
+            return;
+        }
+
+        // Otherwise, probe header or try DICOM
+        fetch(url, { method: 'GET', headers: { Range: 'bytes=0-255' } })
+            .then(async (res) => {
+                const buf = await res.arrayBuffer();
+                const bytes = new Uint8Array(buf);
+                const isImg = 
+                    (bytes[0] === 0xFF && bytes[1] === 0xD8) || // JPEG
+                    (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) || // PNG
+                    (bytes[0] === 0x42 && bytes[1] === 0x4D); // BMP
+
+                if (isImg) {
+                    setIsStandardImage(true);
+                    setLoadingScan(false);
+                } else {
+                    setIsStandardImage(false);
+                    // Load DICOM via DWV
+                    loadDicomWithDwv(url);
+                }
+            })
+            .catch(() => {
+                // Default fallback to standard image loader
+                setIsStandardImage(true);
+                setLoadingScan(false);
+            });
+    }, [activeScan, resetTransform]);
+
+    // Load DICOM via DWV
+    const loadDicomWithDwv = (url: string) => {
+        const layerDiv = document.getElementById('layerGroup0');
+        if (!layerDiv) return;
+        layerDiv.innerHTML = '';
+
+        try {
+            const app = new App();
+            const viewConfig = new ViewConfig('layerGroup0');
+            const options = new AppOptions({ '*': [viewConfig] });
+            (options as any).tools = {
+                WindowLevel: {},
+                ZoomAndPan: {},
+                Draw: {}
+            };
+
+            app.init(options);
+
+            app.addEventListener('loadstart', () => {
+                setLoadingScan(true);
+            });
+
+            app.addEventListener('loadend', () => {
+                setLoadingScan(false);
+                try {
+                    app.fitToContainer();
+                    app.initWLDisplay();
+                    app.setTool('WindowLevel');
+                    setActiveTool('WindowLevel');
+                } catch (e) {
+                    console.error('[DWV loadend error]', e);
+                }
+            });
+
+            app.addEventListener('error', (event: any) => {
+                console.error('[DWV error, trying fallback]', event);
+                renderDicomFallback(url).then((success) => {
+                    setLoadingScan(false);
                     if (success) {
                         setUseFallback(true);
                     } else {
-                        setLoadError('خطأ أثناء تشغيل الفحص.');
+                        setLoadError('تعذّر عرض ملف الفحص.');
                     }
                 });
-            }
-        } else {
-            renderFallback(activeScan.dicom_url).then((success) => {
-                setLoadingDicom(false);
+            });
+
+            setDwvApp(app);
+            app.loadURLs([url]);
+        } catch (err) {
+            console.error('[DWV init error]', err);
+            renderDicomFallback(url).then((success) => {
+                setLoadingScan(false);
                 if (success) {
                     setUseFallback(true);
                 } else {
@@ -317,51 +303,78 @@ export default function Show({ patient }: any) {
                 }
             });
         }
-    }, [activeScan, dwvApp]);
+    };
 
+    // Zoom and pan controls for standard images
+    const handleZoomIn = () => setZoom(z => Math.min(z * 1.25, 10));
+    const handleZoomOut = () => setZoom(z => Math.max(z / 1.25, 0.2));
+
+    const handleWheel = (e: React.WheelEvent) => {
+        if (!isStandardImage) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.15 : 0.85;
+        setZoom(z => Math.min(Math.max(z * factor, 0.2), 10));
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (!isStandardImage) return;
+        setIsDragging(true);
+        setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isStandardImage || !isDragging) return;
+        setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    };
+
+    const handleMouseUp = () => setIsDragging(false);
+
+    // Toolbar actions
     const selectTool = (toolId: string) => {
-        if (!dwvApp) return;
-        try {
-            dwvApp.setTool(toolId);
-            setActiveTool(toolId);
-        } catch {}
+        setActiveTool(toolId);
+        if (!isStandardImage && dwvApp) {
+            try {
+                dwvApp.setTool(toolId);
+            } catch {}
+        }
     };
 
     const rotate = (angle: number) => {
-        if (!dwvApp) return;
-        try {
-            const lg: any = dwvApp.getActiveLayerGroup();
-            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
-            if (vc && typeof vc.rotate === 'function') {
-                vc.rotate(angle);
-            }
-        } catch {}
+        if (isStandardImage) {
+            setRotation(r => (r + angle) % 360);
+        } else if (dwvApp) {
+            try {
+                const lg: any = dwvApp.getActiveLayerGroup();
+                const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
+                if (vc && typeof vc.rotate === 'function') vc.rotate(angle);
+            } catch {}
+        }
     };
 
     const toggleInvert = () => {
-        if (!dwvApp) return;
-        try {
-            const lg: any = dwvApp.getActiveLayerGroup();
-            const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
-            if (vc && typeof vc.setInvert === 'function') {
-                const newInvert = !isInverted;
-                vc.setInvert(newInvert);
-                setIsInverted(newInvert);
-            }
-        } catch {}
+        setIsInverted(prev => !prev);
+        if (!isStandardImage && dwvApp) {
+            try {
+                const lg: any = dwvApp.getActiveLayerGroup();
+                const vc = lg?.getActiveViewLayer?.()?.getViewController?.() || lg?.getViewController?.();
+                if (vc && typeof vc.setInvert === 'function') {
+                    vc.setInvert(!isInverted);
+                }
+            } catch {}
+        }
     };
 
     const reset = () => {
-        if (dwvApp) {
+        resetTransform();
+        if (!isStandardImage && dwvApp) {
             try {
                 dwvApp.resetZoomPan();
                 dwvApp.resetLayout();
                 dwvApp.initWLDisplay();
-                setIsInverted(false);
             } catch {}
         }
-        if (activeScan?.dicom_url && useFallback) {
-            renderFallback(activeScan.dicom_url);
+        if (useFallback && activeScan?.dicom_url) {
+            renderDicomFallback(activeScan.dicom_url);
         }
     };
 
@@ -369,20 +382,31 @@ export default function Show({ patient }: any) {
         if (!activeScan?.dicom_url) return;
         const a = document.createElement('a');
         a.href = activeScan.dicom_url;
-        a.download = `scan_${activeScan.id}.dcm`;
+        const ext = isStandardImage ? 'jpg' : 'dcm';
+        a.download = `scan_${activeScan.id}_${activeScan.patient_id || 'patient'}.${ext}`;
         a.click();
     };
 
     const doPrint = () => {
-        const container = containerRef.current;
-        if (!container) return;
-        const canvas = container.querySelector('canvas') || fallbackCanvasRef.current;
-        if (!canvas) return;
+        if (!activeScan?.dicom_url) return;
         const w = window.open('', '_blank');
         if (!w) return;
-        w.document.write(`<img src="${canvas.toDataURL('image/png')}" style="max-width:100%"/>`);
+        w.document.write(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>طباعة فحص OCT - ${patient.patient_name}</title>
+                    <style>
+                        body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                        img { max-width: 98%; max-height: 98%; object-fit: contain; transform: rotate(${rotation}deg); filter: ${isInverted ? 'invert(1)' : 'none'}; }
+                    </style>
+                </head>
+                <body>
+                    <img src="${activeScan.dicom_url}" onload="window.print(); window.close();" />
+                </body>
+            </html>
+        `);
         w.document.close();
-        w.print();
     };
 
     const handleScanSelect = (scan: any) => {
@@ -394,41 +418,100 @@ export default function Show({ patient }: any) {
     const Toolbar = () => (
         <div className="bg-[#1a1a1a] border-b border-[#333] px-2 py-2 overflow-x-auto flex-shrink-0">
             <div className="flex items-center gap-1 min-w-max">
-                {TOOLS.map(T => (
-                    <button key={T.id} title={T.label} onClick={() => selectTool(T.id)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${
-                            activeTool===T.id ? 'bg-primary text-primary-foreground' : 'text-[#e0e0e0] hover:bg-white/10'
-                        }`}>
-                        <T.icon className="h-4 w-4"/><span>{T.label}</span>
-                    </button>
-                ))}
+                {isStandardImage ? (
+                    <>
+                        <button onClick={handleZoomIn} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-[#e0e0e0] hover:bg-white/10" title="تكبير (+)">
+                            <ZoomIn className="h-4 w-4"/><span>تكبير</span>
+                        </button>
+                        <button onClick={handleZoomOut} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-[#e0e0e0] hover:bg-white/10" title="تصغير (-)">
+                            <ZoomOut className="h-4 w-4"/><span>تصغير</span>
+                        </button>
+                    </>
+                ) : (
+                    TOOLS.map(T => (
+                        <button key={T.id} title={T.label} onClick={() => selectTool(T.id)}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${
+                                activeTool===T.id ? 'bg-primary text-primary-foreground' : 'text-[#e0e0e0] hover:bg-white/10'
+                            }`}>
+                            <T.icon className="h-4 w-4"/><span>{T.label}</span>
+                        </button>
+                    ))
+                )}
                 <div className="w-px h-5 bg-[#444] mx-1"/>
-                <button onClick={()=>rotate(90)}   className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تدوير يمين"><RotateCw className="h-4 w-4"/></button>
-                <button onClick={toggleInvert} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="عكس الألوان"><SlidersHorizontal className="h-4 w-4"/></button>
-                <button onClick={reset}        className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="إعادة ضبط"><RefreshCw className="h-4 w-4"/></button>
-                <button onClick={doPrint}      className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="طباعة"><Printer className="h-4 w-4"/></button>
-                <button onClick={dlFile}       className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تحميل"><Download className="h-4 w-4"/></button>
+                <button onClick={() => rotate(90)} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تدوير (90°)">
+                    <RotateCw className="h-4 w-4"/>
+                </button>
+                <button onClick={toggleInvert} className={`p-1.5 rounded transition-colors ${isInverted ? 'bg-primary text-primary-foreground' : 'text-[#e0e0e0] hover:bg-white/10'}`} title="عكس الألوان">
+                    <SlidersHorizontal className="h-4 w-4"/>
+                </button>
+                <button onClick={reset} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="إعادة ضبط">
+                    <RefreshCw className="h-4 w-4"/>
+                </button>
+                <button onClick={doPrint} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="طباعة">
+                    <Printer className="h-4 w-4"/>
+                </button>
+                <button onClick={dlFile} className="p-1.5 rounded text-[#e0e0e0] hover:bg-white/10" title="تحميل">
+                    <Download className="h-4 w-4"/>
+                </button>
             </div>
         </div>
     );
 
     // Viewer Canvas Wrapper
     const ViewerCanvas = ({ className = '' }: { className?: string }) => (
-        <div ref={containerRef} className={`relative overflow-hidden min-h-0 flex-1 flex items-center justify-center bg-black ${className}`}>
-            <div id="layerGroup0" className={`layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden ${useFallback ? 'hidden' : ''}`}
-                onContextMenu={e=>e.preventDefault()}/>
+        <div 
+            ref={containerRef} 
+            className={`relative overflow-hidden min-h-0 flex-1 flex items-center justify-center bg-black select-none ${className}`}
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            style={{ cursor: isStandardImage ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+        >
+            {/* Standard Image Viewer */}
+            {isStandardImage && activeScan?.dicom_url && (
+                <div 
+                    className="w-full h-full flex items-center justify-center overflow-hidden"
+                    style={{
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                        filter: isInverted ? 'invert(1) hue-rotate(180deg)' : 'none',
+                    }}
+                >
+                    <img 
+                        ref={imageRef}
+                        src={activeScan.dicom_url} 
+                        alt="OCT Scan" 
+                        className="max-w-full max-h-full object-contain pointer-events-none"
+                        onLoad={() => setLoadingScan(false)}
+                        onError={() => {
+                            setLoadingScan(false);
+                            setLoadError('تعذّر تحميل صورة الفحص.');
+                        }}
+                    />
+                </div>
+            )}
 
-            <canvas ref={fallbackCanvasRef} className={`max-w-full max-h-full object-contain ${useFallback ? 'block' : 'hidden'}`} />
+            {/* DICOM DWV Layer (When DICOM) */}
+            {!isStandardImage && (
+                <>
+                    <div id="layerGroup0" className={`layerGroup absolute inset-0 w-full h-full flex items-center justify-center cursor-crosshair overflow-hidden ${useFallback ? 'hidden' : ''}`}
+                        onContextMenu={e=>e.preventDefault()}/>
 
-            {loadingDicom && (
+                    <canvas ref={fallbackCanvasRef} className={`max-w-full max-h-full object-contain ${useFallback ? 'block' : 'hidden'}`} />
+                </>
+            )}
+
+            {loadingScan && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10 pointer-events-none">
                     <div className="flex flex-col items-center gap-3">
                         <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin"/>
-                        <p className="text-white text-sm">جاري تشغيل صورة DICOM...</p>
+                        <p className="text-white text-sm">جاري تحميل صورة الفحص...</p>
                     </div>
                 </div>
             )}
-            {loadError && !loadingDicom && (
+            {loadError && !loadingScan && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 pointer-events-none">
                     <div className="text-center text-white/70 px-6">
                         <FileImage className="h-12 w-12 mx-auto mb-3 opacity-20"/>
@@ -436,7 +519,7 @@ export default function Show({ patient }: any) {
                     </div>
                 </div>
             )}
-            {!activeScan && !loadingDicom && !loadError && (
+            {!activeScan && !loadingScan && !loadError && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
                     <div className="text-center text-white/40 px-6">
                         <FileImage className="h-16 w-16 mx-auto mb-3 opacity-20"/>
@@ -477,7 +560,7 @@ export default function Show({ patient }: any) {
                                     </p>
                                 )}
                                 {!scan.dicom_url && (
-                                    <p className={`text-xs mt-1 ${isActive?'text-yellow-200':'text-yellow-600'}`}>⚠ لا يوجد ملف DICOM</p>
+                                    <p className={`text-xs mt-1 ${isActive?'text-yellow-200':'text-yellow-600'}`}>⚠ لا توجد صورة مرفقة</p>
                                 )}
                             </div>
                         </div>
@@ -530,7 +613,7 @@ export default function Show({ patient }: any) {
                         </div>
                     )}
 
-                    {/* DICOM viewer */}
+                    {/* Scan viewer */}
                     <div className="flex flex-col flex-1 min-h-0 bg-[#050505]">
                         <Toolbar/>
                         <ViewerCanvas className="flex-1"/>
@@ -588,7 +671,7 @@ export default function Show({ patient }: any) {
                         <div className="flex-1 overflow-y-auto"><ScansList/></div>
                     </div>
 
-                    {/* RIGHT: DICOM viewer */}
+                    {/* RIGHT: Scan viewer */}
                     <div className="flex-1 bg-[#050505] rounded-xl border border-border shadow-sm overflow-hidden flex flex-col min-w-0">
                         <Toolbar/>
                         <ViewerCanvas className="flex-1"/>

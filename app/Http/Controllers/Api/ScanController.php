@@ -41,11 +41,17 @@ class ScanController extends Controller
             'patient_phone' => 'nullable|string',
             'doctor_name' => 'nullable|string',
             'study_date' => 'nullable|string',
-            'dicom_file' => 'required|file',
+            'dicom_file' => 'nullable|file',
+            'image_file' => 'nullable|file',
+            'file' => 'nullable|file',
         ]);
 
+        $file = $request->file('dicom_file') ?? $request->file('image_file') ?? $request->file('file');
+        if (!$file) {
+            return response()->json(['message' => 'ملف الصورة أو الفحص مطلوب'], 422);
+        }
+
         // Store the uploaded file in storage/app/public/dicom_files (accessible via /storage/ symlink)
-        $file = $request->file('dicom_file');
         $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
         $filePath = 'dicom_files/' . $filename;
         Storage::disk('public')->put($filePath, file_get_contents($file->getRealPath()));
@@ -61,7 +67,7 @@ class ScanController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'DICOM scan uploaded successfully',
+            'message' => 'Scan uploaded successfully',
             'data' => [
                 'id' => $scan->id,
                 'patient_id' => $scan->patient_id,
@@ -161,8 +167,15 @@ class ScanController extends Controller
         }
 
         $request->validate([
-            'dicom_file' => 'required|file',
+            'dicom_file' => 'nullable|file',
+            'image_file' => 'nullable|file',
+            'file' => 'nullable|file',
         ]);
+
+        $file = $request->file('dicom_file') ?? $request->file('image_file') ?? $request->file('file');
+        if (!$file) {
+            return response()->json(['message' => 'ملف الفحص أو الصورة مطلوب'], 422);
+        }
 
         // Delete old file
         if ($scan->file_path && Storage::disk('public')->exists($scan->file_path)) {
@@ -170,7 +183,6 @@ class ScanController extends Controller
         }
 
         // Store new file in storage
-        $file = $request->file('dicom_file');
         $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
         $filePath = 'dicom_files/' . $filename;
         Storage::disk('public')->put($filePath, file_get_contents($file->getRealPath()));
@@ -179,7 +191,7 @@ class ScanController extends Controller
         $scan->save();
 
         return response()->json([
-            'message' => 'DICOM scan replaced successfully',
+            'message' => 'Scan replaced successfully',
             'data' => [
                 'id' => $scan->id,
                 'FileUrl' => Storage::url($scan->file_path),
